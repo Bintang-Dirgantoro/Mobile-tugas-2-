@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+
 import 'package:mobile_tugas2/pages/group_page.dart';
+import 'package:mobile_tugas2/theme/app_colors.dart';
 
 void main() {
   runApp(const MyApp());
@@ -13,6 +15,26 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Aplikasi',
+      theme: ThemeData(
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: AppColors.background,
+        colorScheme: const ColorScheme.dark(
+          primary: AppColors.accent,
+          secondary: AppColors.accent,
+          surface: AppColors.background,
+        ),
+      appBarTheme: const AppBarTheme(
+          backgroundColor: AppColors.background,
+          elevation: 0,
+          centerTitle: false,
+          titleTextStyle: TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
+          iconTheme: IconThemeData(color: AppColors.textPrimary),
+        ),
+      ),
       home: const GroupPage(),
     );
   }
