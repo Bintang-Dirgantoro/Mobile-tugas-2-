@@ -213,7 +213,7 @@ class GroupPage extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             const Text(
-              'Kerja bersama, hasil luar biasa.',
+              'Aplikasi Mobile',
               style: TextStyle(
                 color: AppColors.textSecondary,
                 fontStyle: FontStyle.italic,
