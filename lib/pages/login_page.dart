@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'home_page.dart';
+
 import '../services/auth_services.dart';
 
 import 'package:firebase_auth/firebase_auth.dart';
@@ -79,14 +81,14 @@ class _LoginPageState extends State<LoginPage> {
                   }
 
                   final messenger = ScaffoldMessenger.of(context);
-
+                  final navigator = Navigator.of(context);
                   try {
                     await _authService.login(email, password);
 
                     if (!mounted) return;
 
-                    messenger.showSnackBar(
-                      const SnackBar(content: Text('Login berhasil')),
+                    navigator.pushReplacement(
+                      MaterialPageRoute(builder: (context) => const HomePage()),
                     );
                   } on FirebaseAuthException catch (e) {
                     String message = 'Login gagal';
