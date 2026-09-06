@@ -211,6 +211,14 @@ class GroupPage extends StatelessWidget {
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
+            const SizedBox(height: 16),
+            const Text(
+              'Kerja bersama, hasil luar biasa.',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
             const SizedBox(height: 24),
             // ===== KARTU ANGGOTA =====
             _memberCard(

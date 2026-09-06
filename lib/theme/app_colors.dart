@@ -22,5 +22,5 @@ class AppColors {
    // Warna ikon jobdesk (khusus halaman Data Kelompok)
   static const success = Color(0xFF4ADE80); // hijau - kalkulator
   static const warning = Color(0xFFFB923C); // oranye - UI design
-  static const danger = Color.fromARGB(255, 190, 0, 0); // pink - ganjil genap
+  static const danger = Color.fromARGB(255, 190, 0, 0); // merah - ganjil genap
 }

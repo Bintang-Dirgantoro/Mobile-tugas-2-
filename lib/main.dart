@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:mobile_tugas2/pages/group_page.dart';
+import 'package:mobile_tugas2/pages/odd_even_page.dart';
 import 'package:mobile_tugas2/theme/app_colors.dart';
 
 void main() {
@@ -35,7 +36,7 @@ class MyApp extends StatelessWidget {
           iconTheme: IconThemeData(color: AppColors.textPrimary),
         ),
       ),
-      home: const GroupPage(),
+      home: const OddEvenPage(),
     );
   }
 }
