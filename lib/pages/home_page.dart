@@ -1,14 +1,36 @@
 import 'package:flutter/material.dart';
 
-import 'group_page.dart';
+import '../services/auth_services.dart';
+
+import 'login_page.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final AuthService authService = AuthService();
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Tugas Mobile 2')),
+      appBar: AppBar(
+        title: const Text('Tugas Mobile 2'),
+        actions: [
+          IconButton(
+            onPressed: () async {
+              await authService.logout();
+
+              if (!context.mounted) return;
+
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const LoginPage()),
+              );
+            },
+            icon: const Icon(Icons.logout),
+            tooltip: 'Logout',
+          ),
+        ],
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -22,12 +44,7 @@ class HomePage extends StatelessWidget {
             const SizedBox(height: 20),
 
             ElevatedButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const GroupPage()),
-                );
-              },
+              onPressed: () {},
               child: const Text('Data Kelompok'),
             ),
 
