@@ -223,8 +223,8 @@ class GroupPage extends StatelessWidget {
             const SizedBox(height: 12),
             _memberCard(
               initial: 'B',
-              name: 'Bintang',
-              nim: '124240XXX',
+              name: 'Bintang Dirgantoro Gien',
+              nim: '124240088',
               role: 'Anggota',
               badgeColor: AppColors.textSecondary,
               jobdesks: [
