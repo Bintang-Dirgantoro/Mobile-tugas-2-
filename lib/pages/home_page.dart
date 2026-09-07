@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
 
+import '../menubagi.dart';
+import '../menukali.dart';
+import '../menukurang.dart';
+import '../menutambah.dart';
 import '../services/auth_services.dart';
-
+import 'group_page.dart';
 import 'login_page.dart';
+import 'odd_even_page.dart';
+import 'total_page.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -31,7 +37,7 @@ class HomePage extends StatelessWidget {
           ),
         ],
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -44,27 +50,90 @@ class HomePage extends StatelessWidget {
             const SizedBox(height: 20),
 
             ElevatedButton(
-              onPressed: () {},
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const GroupPage()),
+                );
+              },
               child: const Text('Data Kelompok'),
             ),
 
-            ElevatedButton(onPressed: () {}, child: const Text('Penjumlahan')),
-
-            ElevatedButton(onPressed: () {}, child: const Text('Pengurangan')),
-
-            ElevatedButton(onPressed: () {}, child: const Text('Perkalian')),
-
-            ElevatedButton(onPressed: () {}, child: const Text('Pembagian')),
+            const SizedBox(height: 10),
 
             ElevatedButton(
-              onPressed: () {},
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const MenuTambah()),
+                );
+              },
+              child: const Text('Penjumlahan'),
+            ),
+
+            const SizedBox(height: 10),
+
+            ElevatedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const MenuKurang()),
+                );
+              },
+              child: const Text('Pengurangan'),
+            ),
+
+            const SizedBox(height: 10),
+
+            ElevatedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const MenuKali()),
+                );
+              },
+              child: const Text('Perkalian'),
+            ),
+
+            const SizedBox(height: 10),
+
+            ElevatedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const MenuBagi()),
+                );
+              },
+              child: const Text('Pembagian'),
+            ),
+
+            const SizedBox(height: 10),
+
+            ElevatedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const OddEvenPage()),
+                );
+              },
               child: const Text('Ganjil / Genap'),
             ),
 
-            ElevatedButton(onPressed: () {}, child: const Text('Total Nilai')),
+            const SizedBox(height: 10),
+
+            ElevatedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const TotalPage()),
+                );
+              },
+              child: const Text('Total Nilai'),
+            ),
           ],
         ),
       ),
     );
   }
 }
+
