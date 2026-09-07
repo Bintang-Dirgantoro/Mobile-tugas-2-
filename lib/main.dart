@@ -1,5 +1,10 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+
+import 'package:mobile_tugas2/pages/group_page.dart';
+import 'package:mobile_tugas2/pages/odd_even_page.dart';
+import 'package:mobile_tugas2/theme/app_colors.dart';
+import 'package:mobile_tugas2/pages/total_page.dart';
 import 'menutambah.dart';
 import 'menukurang.dart';
 import 'menukali.dart';
@@ -25,9 +30,26 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'Kalkulator',
       theme: ThemeData(
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: AppColors.background,
+        colorScheme: const ColorScheme.dark(
+          primary: AppColors.accent,
+          secondary: AppColors.accent,
+          surface: AppColors.background,
+        ),
+      appBarTheme: const AppBarTheme(
+          backgroundColor: AppColors.background,
+          elevation: 0,
+          centerTitle: false,
+          titleTextStyle: TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
+          iconTheme: IconThemeData(color: AppColors.textPrimary),
+        ),
       ),
-      home: const MenuPage(),
+      home: const TotalPage(),
     );
   }
 }
