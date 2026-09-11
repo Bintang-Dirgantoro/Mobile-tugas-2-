@@ -19,7 +19,7 @@ class HomePage extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Tugas Mobile 2'),
+        title: const Text('Numeria'),
         actions: [
           IconButton(
             onPressed: () async {

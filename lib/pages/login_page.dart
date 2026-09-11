@@ -37,7 +37,7 @@ class _LoginPageState extends State<LoginPage> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Text(
-              'Tugas Mobile 2',
+              'Numeria',
               style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
             ),
 
