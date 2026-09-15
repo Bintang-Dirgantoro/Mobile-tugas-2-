@@ -17,7 +17,7 @@ class _OddEvenPageState extends State<OddEvenPage> {
     // ===== LOGIKA CEK GANJIL/GENAP =====
   void _checkOddEven() {
     final input = _controller.text.trim();
-    final number = int.tryParse(input);
+    final number = double.tryParse(input);
 
     // Input kosong / bukan angka
     if (number == null) {
