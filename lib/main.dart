@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 import 'package:mobile_tugas2/theme/app_colors.dart';
 import 'firebase_options.dart';
@@ -10,7 +11,11 @@ import 'pages/login_page.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Inisialisasi Firebase Backend
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  // Inisialisasi data format tanggal bahasa Indonesia
+  await initializeDateFormatting('id_ID', null);
 
   runApp(const MyApp());
 }
@@ -22,7 +27,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Kalkulator',
+      title: 'Smart UMKM & Utilitas',
       theme: ThemeData(
         brightness: Brightness.dark,
         scaffoldBackgroundColor: AppColors.background,
@@ -43,12 +48,15 @@ class MyApp extends StatelessWidget {
           iconTheme: IconThemeData(color: AppColors.textPrimary),
         ),
       ),
+      // Memeriksa status sesi login Firebase secara realtime
       home: StreamBuilder<User?>(
         stream: FirebaseAuth.instance.authStateChanges(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
+              body: Center(
+                child: CircularProgressIndicator(color: AppColors.accent),
+              ),
             );
           }
           if (snapshot.hasData) {
@@ -59,4 +67,4 @@ class MyApp extends StatelessWidget {
       ),
     );
   }
-}
+}

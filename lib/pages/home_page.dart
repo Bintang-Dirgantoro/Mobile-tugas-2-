@@ -1,139 +1,301 @@
 import 'package:flutter/material.dart';
-
-import '../menubagi.dart';
-import '../menukali.dart';
-import '../menukurang.dart';
-import '../menutambah.dart';
-import '../services/auth_services.dart';
+import '../theme/app_colors.dart';
 import 'group_page.dart';
-import 'login_page.dart';
-import 'odd_even_page.dart';
-import 'total_page.dart';
+import 'computation_page.dart';
+import 'crud_page.dart';
+import 'date_conversion_page.dart';
+import 'traditional_calendar_page.dart';
+import 'stopwatch_page.dart';
+import 'help_logout_page.dart';
 
-class HomePage extends StatelessWidget {
+/// Halaman Utama Aplikasi Mobile Tugas Kelompok
+/// 
+/// Struktur:
+/// 1. Bottom Navigation Bar terdiri dari 3 tab:
+///    - Tab 0: Halaman Utama (Main Dashboard)
+///    - Tab 1: Aplikasi Stopwatch
+///    - Tab 2: Bantuan & Logout
+/// 2. Pada Tab 0 (Halaman Utama), terdapat 5 MENU VERTIKAL yang terletak TEPAT DI TENGAH LAYAR:
+///    - Menu 1: Daftar Anggota Kelompok
+///    - Menu 2: Komputasi Finansial & Bisnis UMKM
+///    - Menu 3: Kelola Produk & Inventaris UMKM (Cloud Firestore CRUD)
+///    - Menu 4: Konversi Kalender Hijriah & Kalkulator Umur Presisi (Tahun, Bulan, Hari, Jam, Menit, Detik)
+///    - Menu 5: Konversi Kalender Tradisional (Weton Jawa & Saka Bali)
+class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
   @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  int _currentTabIndex = 0;
+
+  @override
   Widget build(BuildContext context) {
-    final AuthService authService = AuthService();
-
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Numeria'),
-        actions: [
-          IconButton(
-            onPressed: () async {
-              await authService.logout();
-
-              if (!context.mounted) return;
-
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (context) => const LoginPage()),
-              );
-            },
-            icon: const Icon(Icons.logout),
-            tooltip: 'Logout',
-          ),
+      body: IndexedStack(
+        index: _currentTabIndex,
+        children: [
+          _buildMainDashboard(context),
+          const StopwatchPage(),
+          const HelpAndLogoutPage(),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text(
-              'Menu Utama',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+      bottomNavigationBar: Container(
+        decoration: const BoxDecoration(
+          border: Border(top: BorderSide(color: AppColors.border, width: 1)),
+        ),
+        child: BottomNavigationBar(
+          currentIndex: _currentTabIndex,
+          backgroundColor: AppColors.card,
+          selectedItemColor: AppColors.accent,
+          unselectedItemColor: AppColors.textSecondary,
+          selectedFontSize: 12,
+          unselectedFontSize: 12,
+          type: BottomNavigationBarType.fixed,
+          onTap: (index) {
+            setState(() => _currentTabIndex = index);
+          },
+          items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.dashboard_outlined),
+              activeIcon: Icon(Icons.dashboard),
+              label: 'Halaman Utama',
             ),
-
-            const SizedBox(height: 20),
-
-            ElevatedButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const GroupPage()),
-                );
-              },
-              child: const Text('Data Kelompok'),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.timer_outlined),
+              activeIcon: Icon(Icons.timer),
+              label: 'Stopwatch',
             ),
-
-            const SizedBox(height: 10),
-
-            ElevatedButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const MenuTambah()),
-                );
-              },
-              child: const Text('Penjumlahan'),
-            ),
-
-            const SizedBox(height: 10),
-
-            ElevatedButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const MenuKurang()),
-                );
-              },
-              child: const Text('Pengurangan'),
-            ),
-
-            const SizedBox(height: 10),
-
-            ElevatedButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const MenuKali()),
-                );
-              },
-              child: const Text('Perkalian'),
-            ),
-
-            const SizedBox(height: 10),
-
-            ElevatedButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const MenuBagi()),
-                );
-              },
-              child: const Text('Pembagian'),
-            ),
-
-            const SizedBox(height: 10),
-
-            ElevatedButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const OddEvenPage()),
-                );
-              },
-              child: const Text('Ganjil / Genap'),
-            ),
-
-            const SizedBox(height: 10),
-
-            ElevatedButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const TotalPage()),
-                );
-              },
-              child: const Text('Total Nilai'),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.help_outline),
+              activeIcon: Icon(Icons.help),
+              label: 'Bantuan & Akun',
             ),
           ],
         ),
       ),
     );
   }
-}
 
+  /// Tampilan Tab Halaman Utama dengan 5 Menu di Tengah Layar Secara Vertikal
+  Widget _buildMainDashboard(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Smart UMKM & Utilitas'),
+        centerTitle: true,
+        elevation: 0,
+      ),
+      body: SafeArea(
+        child: Center(
+          // Center & SingleChildScrollView menjamin 5 menu tersusun vertikal tepat di tengah layar
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Header Mini
+                Container(
+                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                  margin: const EdgeInsets.only(bottom: 20),
+                  decoration: BoxDecoration(
+                    color: AppColors.card,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppColors.accent.withValues(alpha: 0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.storefront, color: AppColors.accent, size: 24),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: const [
+                            Text(
+                              'Menu Utama Aplikasi',
+                              style: TextStyle(
+                                color: AppColors.textPrimary,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Pilih layanan komputasi & utilitas di bawah',
+                              style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // ==========================================
+                // 5 MENU VERTIKAL DI TENGAH LAYAR
+                // ==========================================
+
+                // MENU 1: DAFTAR ANGGOTA
+                _buildVerticalMenuCard(
+                  context: context,
+                  icon: Icons.groups_outlined,
+                  accentColor: AppColors.accent,
+                  title: '1. Daftar Anggota',
+                  subtitle: 'Data profil 3 anggota kelompok & peran',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const GroupPage()),
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
+
+                // MENU 2: KOMPUTASI SESUAI TEMA
+                _buildVerticalMenuCard(
+                  context: context,
+                  icon: Icons.calculate_outlined,
+                  accentColor: AppColors.success,
+                  title: '2. Komputasi Finansial UMKM',
+                  subtitle: 'Kalkulator laba, margin, diskon & pajak',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const ComputationPage()),
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
+
+                // MENU 3: CRUD SESUAI TEMA (CLOUDFIRESTORE)
+                _buildVerticalMenuCard(
+                  context: context,
+                  icon: Icons.storage_outlined,
+                  accentColor: const Color(0xFF38BDF8), // Sky blue
+                  title: '3. Kelola Produk UMKM (CRUD)',
+                  subtitle: 'Database inventaris produk Cloud Firestore',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const CrudPage()),
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
+
+                // MENU 4: KONVERSI HIJRIAH & KALKULATOR UMUR PRESISI
+                _buildVerticalMenuCard(
+                  context: context,
+                  icon: Icons.calendar_month_outlined,
+                  accentColor: AppColors.warning,
+                  title: '4. Kalender Hijriah & Umur Presisi',
+                  subtitle: 'Konversi Hijriah & umur detail hingga detik',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const DateConversionPage()),
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
+
+                // MENU 5: KONVERSI WETON & SAKA BALI
+                _buildVerticalMenuCard(
+                  context: context,
+                  icon: Icons.temple_hindu_outlined,
+                  accentColor: const Color(0xFFF43F5E), // Rose red
+                  title: '5. Kalender Weton & Saka Bali',
+                  subtitle: 'Pasaran Jawa, neptu, wuku & kalender Bali',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const TraditionalCalendarPage()),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Card Menu Vertikal yang Interaktif dan Rapi
+  Widget _buildVerticalMenuCard({
+    required BuildContext context,
+    required IconData icon,
+    required Color accentColor,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.2),
+              blurRadius: 6,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: accentColor.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: accentColor.withValues(alpha: 0.4)),
+              ),
+              child: Icon(icon, color: accentColor, size: 24),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, color: AppColors.textSecondary.withValues(alpha: 0.7)),
+          ],
+        ),
+      ),
+    );
+  }
+}
