@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import '../theme/app_colors.dart';
+import '../../theme/app_colors.dart';
 
 /// Halaman Aplikasi Stopwatch (Bottom Nav Tab 2)
 /// 

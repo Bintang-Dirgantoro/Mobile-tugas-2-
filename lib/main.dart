@@ -5,8 +5,8 @@ import 'package:intl/date_symbol_data_local.dart';
 
 import 'package:mobile_tugas2/theme/app_colors.dart';
 import 'firebase_options.dart';
-import 'pages/home_page.dart';
-import 'pages/login_page.dart';
+import 'pages/dashboard/home_page.dart';
+import 'pages/auth/login_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

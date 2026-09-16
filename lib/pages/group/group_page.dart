@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-
-import 'package:mobile_tugas2/theme/app_colors.dart';
+import '../../theme/app_colors.dart';
 
 class GroupPage extends StatelessWidget {
   const GroupPage({super.key});
@@ -151,9 +150,6 @@ class GroupPage extends StatelessWidget {
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text('Data Kelompok'),
-        actions: [
-          IconButton(icon: const Icon(Icons.more_vert), onPressed: () {}),
-        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
@@ -197,13 +193,14 @@ class GroupPage extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             const Text(
-              'Aplikasi Mobile',
+              'Aplikasi Mobile - Smart UMKM & Utilitas',
               style: TextStyle(
                 color: AppColors.textSecondary,
                 fontStyle: FontStyle.italic,
               ),
             ),
             const SizedBox(height: 24),
+
             // ===== KARTU ANGGOTA =====
             _memberCard(
               initial: 'P',
@@ -216,7 +213,7 @@ class GroupPage extends StatelessWidget {
                   Icons.lock_outline,
                   AppColors.accent,
                   'Authentication',
-                  'Login & Register',
+                  'Login & Session',
                 ),
               ],
             ),
@@ -231,8 +228,8 @@ class GroupPage extends StatelessWidget {
                 _jobdeskItem(
                   Icons.calculate_outlined,
                   AppColors.success,
-                  'Calculator',
-                  'Operasi Matematika',
+                  'Computation',
+                  'Komputasi UMKM',
                 ),
               ],
             ),
@@ -248,26 +245,9 @@ class GroupPage extends StatelessWidget {
                   Icons.palette_outlined,
                   AppColors.warning,
                   'UI Design',
-                  'Tampilan Aplikasi',
-                ),
-                const SizedBox(height: 10),
-                _jobdeskItem(
-                  Icons.percent,
-                  AppColors.danger,
-                  'Ganjil Genap',
-                  'Fitur Cek Bilangan',
+                  'Design System',
                 ),
               ],
-            ),
-            const SizedBox(height: 32),
-            // ===== GESTURE BAR (indikator navigasi mobile) =====
-            Container(
-              width: 120,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.border,
-                borderRadius: BorderRadius.circular(2),
-              ),
             ),
           ],
         ),

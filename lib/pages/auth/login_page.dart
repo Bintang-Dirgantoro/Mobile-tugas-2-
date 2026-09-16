@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../services/auth_services.dart';
-import '../theme/app_colors.dart';
-import 'home_page.dart';
+import '../../services/auth_services.dart';
+import '../../theme/app_colors.dart';
+import '../dashboard/home_page.dart';
 
 /// Halaman Login dengan Session Firebase Auth
 /// 

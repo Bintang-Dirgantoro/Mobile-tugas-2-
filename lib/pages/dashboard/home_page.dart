@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
-import '../theme/app_colors.dart';
-import 'group_page.dart';
-import 'computation_page.dart';
-import 'crud_page.dart';
-import 'date_conversion_page.dart';
-import 'traditional_calendar_page.dart';
-import 'stopwatch_page.dart';
-import 'help_logout_page.dart';
+import '../../theme/app_colors.dart';
+import '../group/group_page.dart';
+import '../computation/computation_page.dart';
+import '../crud/crud_page.dart';
+import '../calendar/date_conversion_page.dart';
+import '../calendar/traditional_calendar_page.dart';
+import '../tools/stopwatch_page.dart';
+import '../tools/help_logout_page.dart';
 
 /// Halaman Utama Aplikasi Mobile Tugas Kelompok
 /// 
