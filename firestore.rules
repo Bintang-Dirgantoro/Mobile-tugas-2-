@@ -1,0 +1,59 @@
+rules_version = '2';
+
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: products
+// Document ID: auto-generated Firestore ID
+// Fields:
+//   - name: string (1 to 60 chars) - Nama produk / jasa
+//   - category: string (1 to 30 chars) - Kategori produk
+//   - purchase_price: number (>= 0 and <= 999999999999) - Harga modal / beli
+//   - selling_price: number (>= 0 and <= 999999999999) - Harga jual ke konsumen
+//   - stock: number/int (>= 0 and <= 1000000) - Jumlah stok barang
+//   - created_at: timestamp - Tanggal pembuatan
+//   - user_id: string - UID pemilik produk
+//   - updated_at: timestamp (optional) - Tanggal pembaruan terakhir
+//
+// ===============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function isValidProduct(data) {
+      return data.name is string &&
+             data.name.size() >= 1 && data.name.size() <= 60 &&
+             data.category is string && data.category.size() <= 30 &&
+             data.purchase_price is number && data.purchase_price >= 0 && data.purchase_price <= 999999999999 &&
+             data.selling_price is number && data.selling_price >= 0 && data.selling_price <= 999999999999 &&
+             data.stock is number && data.stock >= 0 && data.stock <= 1000000;
+    }
+
+    match /products/{productId} {
+      // 1. Read: Izinkan jika user sudah login
+      allow read: if isAuthenticated();
+
+      // 2. Create: Wajib login & data sesuai validasi skema
+      allow create: if isAuthenticated() &&
+                       isValidProduct(request.resource.data) &&
+                       hasRequiredFields(['name', 'category', 'purchase_price', 'selling_price', 'stock', 'user_id']);
+
+      // 3. Update: Wajib login & data tetap sesuai validasi skema
+      allow update: if isAuthenticated() &&
+                       isValidProduct(request.resource.data);
+
+      // 4. Delete: Wajib login
+      allow delete: if isAuthenticated();
+    }
+  }
+}
