@@ -30,14 +30,15 @@ class _ComputationPageState extends State<ComputationPage>
   final NumberFormat _currencyFormat = NumberFormat.currency(
     locale: 'id_ID',
     symbol: 'Rp ',
-    decimalDigits: 0,
+    decimalDigits: 2,
   );
 
   // Formatter desimal persentase
-  final NumberFormat _percentFormat = NumberFormat.decimalPattern('id_ID');
+  final NumberFormat _percentFormat = NumberFormat.decimalPattern('id_ID')
+  ..maximumFractionDigits = 2;
 
-  // Batas maksimal input keuangan (999 Miliar)
-  static const double _maxAllowedAmount = 999999999999.0;
+  // Batas maksimal input keuangan (50 Miliar)
+  // static const double _maxAllowedAmount = 50000000000.0;
 
   // Controllers Tab 1: Margin & Markup
   final TextEditingController _costController = TextEditingController();
@@ -105,10 +106,10 @@ class _ComputationPageState extends State<ComputationPage>
       setState(() => _marginError = 'Nominal tidak boleh bernilai negatif!');
       return;
     }
-    if (cost > _maxAllowedAmount || price > _maxAllowedAmount) {
-      setState(() => _marginError = 'Nominal melebihi batas wajar (Maks 999 Miliar)!');
-      return;
-    }
+    // if (cost > _maxAllowedAmount || price > _maxAllowedAmount) {
+    //   setState(() => _marginError = 'Nominal melebihi batas wajar (Maks 50 Miliar)!');
+    //   return;
+    // }
 
     final profit = price - cost;
 
@@ -147,10 +148,10 @@ class _ComputationPageState extends State<ComputationPage>
       setState(() => _discountError = 'Harga awal harus lebih besar dari 0!');
       return;
     }
-    if (originalPrice > _maxAllowedAmount) {
-      setState(() => _discountError = 'Harga melebihi batas wajar!');
-      return;
-    }
+    // if (originalPrice > _maxAllowedAmount) {
+    //   setState(() => _discountError = 'Harga melebihi batas wajar!');
+    //   return;
+    // }
     if (disc1 < 0 || disc1 > 100 || disc2 < 0 || disc2 > 100) {
       setState(() => _discountError = 'Persentase diskon harus di antara 0% s/d 100%!');
       return;
@@ -190,10 +191,10 @@ class _ComputationPageState extends State<ComputationPage>
       setState(() => _taxError = 'Omzet tidak boleh bernilai negatif!');
       return;
     }
-    if (revenue > _maxAllowedAmount) {
-      setState(() => _taxError = 'Nominal melebihi batas sistem!');
-      return;
-    }
+    // if (revenue > _maxAllowedAmount) {
+    //   setState(() => _taxError = 'Nominal melebihi batas sistem!');
+    //   return;
+    // } 
 
     final taxAmount = revenue * (_taxRate / 100);
     final netRevenue = revenue - taxAmount;
