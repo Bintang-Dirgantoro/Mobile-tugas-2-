@@ -25,6 +25,7 @@ class _LoginPageState extends State<LoginPage> {
 
   bool _obscurePassword = true;
   bool _isLoading = false;
+  bool _isRegisterMode = false;
 
   @override
   void dispose() {
@@ -33,7 +34,7 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
-  Future<void> _handleLogin() async {
+  Future<void> _handleAuth() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
 
@@ -47,10 +48,24 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
+    if (_isRegisterMode && password.length < 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Kata sandi pendaftaran minimal 6 karakter!'),
+          backgroundColor: AppColors.warning,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
-      await _authService.login(email, password);
+      if (_isRegisterMode) {
+        await _authService.register(email, password);
+      } else {
+        await _authService.login(email, password);
+      }
 
       if (!mounted) return;
       Navigator.pushReplacement(
@@ -58,10 +73,14 @@ class _LoginPageState extends State<LoginPage> {
         MaterialPageRoute(builder: (context) => const HomePage()),
       );
     } on FirebaseAuthException catch (e) {
-      String message = 'Login gagal, periksa koneksi Anda.';
+      String message = _isRegisterMode ? 'Pendaftaran gagal.' : 'Login gagal, periksa koneksi Anda.';
 
       if (e.code == 'invalid-credential' || e.code == 'wrong-password' || e.code == 'user-not-found') {
         message = 'Email atau password yang Anda masukkan salah.';
+      } else if (e.code == 'email-already-in-use') {
+        message = 'Email ini sudah terdaftar. Silakan langsung login.';
+      } else if (e.code == 'weak-password') {
+        message = 'Kata sandi terlalu lemah (minimal 6 karakter).';
       } else if (e.code == 'invalid-email') {
         message = 'Format alamat email tidak valid.';
       } else if (e.code == 'user-disabled') {
@@ -123,20 +142,22 @@ class _LoginPageState extends State<LoginPage> {
                 ),
                 const SizedBox(height: 24),
 
-                const Text(
-                  'Smart UMKM & Utilitas',
+                Text(
+                  _isRegisterMode ? 'Daftar Akun Baru' : 'Smart UMKM & Utilitas',
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
                     color: AppColors.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 6),
-                const Text(
-                  'Silakan login untuk mengakses seluruh fitur aplikasi',
+                Text(
+                  _isRegisterMode
+                      ? 'Buat akun baru untuk mulai mengelola bisnis & utilitas Anda'
+                      : 'Silakan login untuk mengakses seluruh fitur aplikasi',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                  style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
                 ),
                 const SizedBox(height: 32),
 
@@ -163,7 +184,7 @@ class _LoginPageState extends State<LoginPage> {
                   obscureText: _obscurePassword,
                   style: const TextStyle(color: AppColors.textPrimary),
                   decoration: InputDecoration(
-                    labelText: 'Kata Sandi',
+                    labelText: _isRegisterMode ? 'Kata Sandi Baru (Min. 6 Karakter)' : 'Kata Sandi',
                     hintText: '••••••••',
                     hintStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
                     prefixIcon: const Icon(Icons.key_outlined, color: AppColors.accent, size: 20),
@@ -184,9 +205,9 @@ class _LoginPageState extends State<LoginPage> {
                 ),
                 const SizedBox(height: 24),
 
-                // Tombol Login
+                // Tombol Login / Daftar
                 ElevatedButton(
-                  onPressed: _isLoading ? null : _handleLogin,
+                  onPressed: _isLoading ? null : _handleAuth,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.accent,
                     foregroundColor: Colors.white,
@@ -199,12 +220,34 @@ class _LoginPageState extends State<LoginPage> {
                           width: 20,
                           child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                         )
-                      : const Text(
-                          'Masuk ke Aplikasi',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                      : Text(
+                          _isRegisterMode ? 'Daftar Akun Baru' : 'Masuk ke Aplikasi',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                         ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
+
+                // Tombol Beralih antara Login & Daftar
+                TextButton(
+                  onPressed: _isLoading
+                      ? null
+                      : () {
+                          setState(() {
+                            _isRegisterMode = !_isRegisterMode;
+                          });
+                        },
+                  child: Text(
+                    _isRegisterMode
+                        ? 'Sudah punya akun? Masuk di sini'
+                        : 'Belum punya akun? Daftar di sini',
+                    style: const TextStyle(
+                      color: AppColors.accent,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
 
                 const Text(
                   'Catatan: Sesi login akan tetap tersimpan di perangkat ini hingga Anda menekan tombol Logout.',
