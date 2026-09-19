@@ -1,306 +1,18 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import '../data/menu_presets.dart';
+import '../models/product_model.dart';
+import '../models/transaction_model.dart';
+import '../models/inventory_movement_model.dart';
+
+// Re-export models for convenient global access and 100% backward compatibility
+export '../models/product_model.dart';
+export '../models/transaction_model.dart';
+export '../models/inventory_movement_model.dart';
 
 // ==========================================
-// 1. MODEL PRODUK (MASTER MENU)
-// ==========================================
-
-/// Model Produk UMKM (Master Menu)
-class ProductItem {
-  final String id;
-  final String name;
-  final String category;
-  final double purchasePrice; // Harga Beli (Modal)
-  final double sellingPrice;  // Harga Jual
-  final int stock;            // Stok barang
-  final DateTime createdAt;
-  final String userId;
-
-  ProductItem({
-    required this.id,
-    required this.name,
-    required this.category,
-    required this.purchasePrice,
-    required this.sellingPrice,
-    required this.stock,
-    required this.createdAt,
-    required this.userId,
-  });
-
-  /// Hitung potensi keuntungan per unit
-  double get profitPerUnit => sellingPrice - purchasePrice;
-
-  /// Hitung persentase margin keuntungan
-  double get marginPercentage {
-    if (sellingPrice <= 0) return 0.0;
-    return (profitPerUnit / sellingPrice) * 100;
-  }
-
-  /// Konversi dari Document Snapshot Firestore
-  factory ProductItem.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
-    return ProductItem(
-      id: doc.id,
-      name: data['name'] ?? '',
-      category: data['category'] ?? 'Umum',
-      purchasePrice: (data['purchase_price'] is num)
-          ? (data['purchase_price'] as num).toDouble()
-          : 0.0,
-      sellingPrice: (data['selling_price'] is num)
-          ? (data['selling_price'] as num).toDouble()
-          : 0.0,
-      stock: (data['stock'] is num) ? (data['stock'] as num).toInt() : 0,
-      createdAt: (data['created_at'] is Timestamp)
-          ? (data['created_at'] as Timestamp).toDate()
-          : DateTime.now(),
-      userId: data['user_id'] ?? '',
-    );
-  }
-
-  /// Konversi ke Map untuk disimpan ke Firestore
-  Map<String, dynamic> toMap() {
-    return {
-      'name': name,
-      'category': category,
-      'purchase_price': purchasePrice,
-      'selling_price': sellingPrice,
-      'stock': stock,
-      'created_at': Timestamp.fromDate(createdAt),
-      'user_id': userId,
-    };
-  }
-}
-
-// ==========================================
-// 2. MODEL TRANSAKSI PENJUALAN
-// ==========================================
-
-/// Item detail dalam transaksi penjualan
-class TransactionItem {
-  final String productId;
-  final String productName;
-  final int quantity;
-  final double purchasePrice;
-  final double sellingPrice;
-  final double subtotal;
-
-  TransactionItem({
-    required this.productId,
-    required this.productName,
-    required this.quantity,
-    required this.purchasePrice,
-    required this.sellingPrice,
-    required this.subtotal,
-  });
-
-  Map<String, dynamic> toMap() {
-    return {
-      'product_id': productId,
-      'product_name': productName,
-      'quantity': quantity,
-      'purchase_price': purchasePrice,
-      'selling_price': sellingPrice,
-      'subtotal': subtotal,
-    };
-  }
-
-  factory TransactionItem.fromMap(Map<String, dynamic> map) {
-    return TransactionItem(
-      productId: map['product_id'] ?? '',
-      productName: map['product_name'] ?? '',
-      quantity: (map['quantity'] is num) ? (map['quantity'] as num).toInt() : 1,
-      purchasePrice: (map['purchase_price'] is num) ? (map['purchase_price'] as num).toDouble() : 0.0,
-      sellingPrice: (map['selling_price'] is num) ? (map['selling_price'] as num).toDouble() : 0.0,
-      subtotal: (map['subtotal'] is num) ? (map['subtotal'] as num).toDouble() : 0.0,
-    );
-  }
-}
-
-/// Hasil kembalian pembuatan transaksi baru
-class CreateTransactionResult {
-  final String id;
-  final String code;
-  final double totalAmount;
-  final double totalCost;
-  final int totalItems;
-
-  CreateTransactionResult({
-    required this.id,
-    required this.code,
-    required this.totalAmount,
-    required this.totalCost,
-    required this.totalItems,
-  });
-}
-
-/// Dokumen Transaksi Penjualan Lengkap
-class TransactionModel {
-  final String id;
-  final String transactionCode;
-  final DateTime createdAt;
-  final double totalAmount;
-  final double totalCost;
-  final int totalItems;
-  final List<TransactionItem> items;
-  final String userId;
-  final String status; // 'MENUNGGU_PEMBAYARAN' atau 'LUNAS'
-  final String customerName; // '[Dine In] Meja 1' atau '[Take Away] Antrean #01'
-  final String orderType; // 'DINE_IN' atau 'TAKE_AWAY'
-  final String tableNumber; // 'Meja 1' (jika Dine In)
-  final String queueNumber; // '01' (jika Take Away)
-  final String? paymentMethod; // 'Tunai' atau 'QRIS'
-  final DateTime? paidAt;
-
-  TransactionModel({
-    required this.id,
-    required this.transactionCode,
-    required this.createdAt,
-    required this.totalAmount,
-    required this.totalCost,
-    required this.totalItems,
-    required this.items,
-    required this.userId,
-    this.status = 'MENUNGGU_PEMBAYARAN',
-    this.customerName = 'Pelanggan (Anonymous)',
-    this.orderType = 'DINE_IN',
-    this.tableNumber = '',
-    this.queueNumber = '',
-    this.paymentMethod,
-    this.paidAt,
-  });
-
-  bool get isPaid => status == 'LUNAS';
-  bool get isPending => status == 'MENUNGGU_PEMBAYARAN';
-  bool get isDineIn => orderType == 'DINE_IN';
-  bool get isTakeAway => orderType == 'TAKE_AWAY';
-
-  String get orderTypeLabel => isTakeAway ? 'Take Away (Bungkus)' : 'Dine In (Makan di Sini)';
-
-  String get displayIdentifier {
-    if (isTakeAway && queueNumber.isNotEmpty) {
-      return 'Antrean #$queueNumber';
-    } else if (isDineIn && tableNumber.isNotEmpty) {
-      return tableNumber;
-    }
-    return customerName;
-  }
-
-  double get profit => totalAmount - totalCost;
-
-  factory TransactionModel.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
-    final rawItems = data['items'] as List<dynamic>? ?? [];
-    final items = rawItems
-        .map((item) => TransactionItem.fromMap(Map<String, dynamic>.from(item as Map)))
-        .toList();
-
-    return TransactionModel(
-      id: doc.id,
-      transactionCode: data['transaction_code'] ?? '#TRX-000',
-      createdAt: (data['created_at'] is Timestamp)
-          ? (data['created_at'] as Timestamp).toDate()
-          : DateTime.now(),
-      totalAmount: (data['total_amount'] is num)
-          ? (data['total_amount'] as num).toDouble()
-          : 0.0,
-      totalCost: (data['total_cost'] is num)
-          ? (data['total_cost'] as num).toDouble()
-          : 0.0,
-      totalItems: (data['total_items'] is num)
-          ? (data['total_items'] as num).toInt()
-          : 0,
-      items: items,
-      userId: data['user_id'] ?? '',
-      status: data['status'] ?? 'MENUNGGU_PEMBAYARAN',
-      customerName: data['customer_name'] ?? 'Pelanggan (Anonymous)',
-      orderType: data['order_type'] ?? 'DINE_IN',
-      tableNumber: data['table_number'] ?? '',
-      queueNumber: data['queue_number'] ?? '',
-      paymentMethod: data['payment_method'],
-      paidAt: (data['paid_at'] is Timestamp)
-          ? (data['paid_at'] as Timestamp).toDate()
-          : null,
-    );
-  }
-
-  Map<String, dynamic> toMap() {
-    return {
-      'transaction_code': transactionCode,
-      'created_at': Timestamp.fromDate(createdAt),
-      'total_amount': totalAmount,
-      'total_cost': totalCost,
-      'total_items': totalItems,
-      'items': items.map((e) => e.toMap()).toList(),
-      'user_id': userId,
-      'status': status,
-      'customer_name': customerName,
-      'order_type': orderType,
-      'table_number': tableNumber,
-      'queue_number': queueNumber,
-      'payment_method': paymentMethod,
-      'paid_at': paidAt != null ? Timestamp.fromDate(paidAt!) : null,
-    };
-  }
-}
-
-// ==========================================
-// 3. MODEL MUTASI STOK (INVENTORY MOVEMENT)
-// ==========================================
-
-/// Model Riwayat Pergerakan Stok
-class InventoryMovement {
-  final String id;
-  final String productId;
-  final String productName;
-  final String type; // 'IN' atau 'OUT'
-  final int quantity;
-  final String reason; // 'Penjualan', 'Restock', 'Produk Rusak', 'Kedaluwarsa', 'Penyesuaian'
-  final DateTime createdAt;
-  final String userId;
-
-  InventoryMovement({
-    required this.id,
-    required this.productId,
-    required this.productName,
-    required this.type,
-    required this.quantity,
-    required this.reason,
-    required this.createdAt,
-    required this.userId,
-  });
-
-  factory InventoryMovement.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
-    return InventoryMovement(
-      id: doc.id,
-      productId: data['product_id'] ?? '',
-      productName: data['product_name'] ?? '',
-      type: data['type'] ?? 'OUT',
-      quantity: (data['quantity'] is num) ? (data['quantity'] as num).toInt() : 0,
-      reason: data['reason'] ?? 'Penjualan',
-      createdAt: (data['created_at'] is Timestamp)
-          ? (data['created_at'] as Timestamp).toDate()
-          : DateTime.now(),
-      userId: data['user_id'] ?? '',
-    );
-  }
-
-  Map<String, dynamic> toMap() {
-    return {
-      'product_id': productId,
-      'product_name': productName,
-      'type': type,
-      'quantity': quantity,
-      'reason': reason,
-      'created_at': Timestamp.fromDate(createdAt),
-      'user_id': userId,
-    };
-  }
-}
-
-// ==========================================
-// 4. SERVICE LAYER CLOUD FIRESTORE
+// SERVICE LAYER CLOUD FIRESTORE
 // ==========================================
 
 /// Service untuk Operasi Cloud Firestore (Produk, Transaksi, dan Mutasi Stok)
@@ -404,6 +116,49 @@ class FirestoreService {
     }
   }
 
+  /// Reset database Firestore:
+  /// - Menghapus seluruh transaksi
+  /// - Menghapus seluruh riwayat mutasi stok
+  /// - Menghapus seluruh master produk
+  /// - Jika [reseedWithPresets] true, mengisi ulang dengan template MenuPresets segar
+  /// CATATAN: Firebase Authentication TIDAK disentuh sama sekali (akun tetap aman).
+  Future<void> resetFirestoreDatabase({bool reseedWithPresets = true}) async {
+    try {
+      Future<void> safeDeleteCollection(String collectionName) async {
+        try {
+          final snap = await _db.collection(collectionName).get();
+          if (snap.docs.isEmpty) return;
+
+          for (final doc in snap.docs) {
+            try {
+              await doc.reference.delete();
+            } catch (err) {
+              debugPrint('Lewati dokumen ${doc.id} di $collectionName: $err');
+            }
+          }
+        } catch (e) {
+          debugPrint('Gagal membaca koleksi $collectionName: $e');
+        }
+      }
+
+      // 1. Hapus transaksi penjualan kasir (paling penting agar antrean reset ke 01)
+      await safeDeleteCollection(_collectionTransactions);
+
+      // 2. Hapus master produk lama
+      await safeDeleteCollection(_collectionProducts);
+
+      // 3. Bersihkan log mutasi stok jika ada izin
+      await safeDeleteCollection(_collectionMovements);
+
+      // 4. Muat ulang katalog starter menu segar
+      if (reseedWithPresets && MenuPresets.items.isNotEmpty) {
+        await importPresetMenu(MenuPresets.items);
+      }
+    } catch (e) {
+      throw Exception('Gagal mereset Firestore: $e');
+    }
+  }
+
   /// Perbarui data master produk
   Future<void> updateProduct({
     required String id,
@@ -440,6 +195,51 @@ class FirestoreService {
   // B. OPERASI TRANSAKSI PENJUALAN (SALES)
   // ----------------------------------------------------
 
+  /// Generate nomor transaksi dengan format: KYN-DDMMYY-XXX (contoh: KYN-190926-001)
+  Future<String> generateTransactionCode() async {
+    final now = DateTime.now();
+    final startOfDay = DateTime(now.year, now.month, now.day);
+
+    final dd = now.day.toString().padLeft(2, '0');
+    final mm = now.month.toString().padLeft(2, '0');
+    final yy = (now.year % 100).toString().padLeft(2, '0');
+    final datePrefix = 'KYN-$dd$mm$yy';
+
+    try {
+      QuerySnapshot<Map<String, dynamic>> snap;
+      try {
+        snap = await _db
+            .collection(_collectionTransactions)
+            .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+            .get();
+      } catch (_) {
+        snap = await _db.collection(_collectionTransactions).get();
+      }
+
+      int count = 0;
+      for (final doc in snap.docs) {
+        final data = doc.data();
+        final createdAt = (data['created_at'] is Timestamp)
+            ? (data['created_at'] as Timestamp).toDate()
+            : null;
+
+        final isToday = createdAt != null &&
+            createdAt.year == now.year &&
+            createdAt.month == now.month &&
+            createdAt.day == now.day;
+
+        if (isToday) {
+          count++;
+        }
+      }
+
+      final inc = (count + 1).toString().padLeft(3, '0');
+      return '$datePrefix-$inc';
+    } catch (_) {
+      return '$datePrefix-001';
+    }
+  }
+
   /// Eksekusi transaksi penjualan baru oleh kasir:
   /// - Jika status == 'LUNAS': Stok langsung dipotong secara atomik & mutasi dicatat.
   /// - Jika status == 'MENUNGGU_PEMBAYARAN' (Stash): Stok TIDAK dipotong karena belum dibayar.
@@ -456,7 +256,7 @@ class FirestoreService {
       throw Exception('Keranjang transaksi tidak boleh kosong!');
     }
 
-    final code = '#TRX-${DateTime.now().millisecondsSinceEpoch.toString().substring(6)}';
+    final code = await generateTransactionCode();
     final nowTimestamp = FieldValue.serverTimestamp();
     final isSettled = status == 'LUNAS';
 
@@ -666,21 +466,43 @@ class FirestoreService {
   }
 
   /// Mendapatkan nomor antrean berikutnya untuk hari ini (format '01', '02', dst.)
+  /// Mendapatkan nomor antrean berikutnya untuk hari ini (format '01', '02', dst.)
   Future<String> getNextQueueNumber() async {
     try {
       final now = DateTime.now();
       final startOfDay = DateTime(now.year, now.month, now.day);
-      final snap = await _db
-          .collection(_collectionTransactions)
-          .where('user_id', isEqualTo: _currentUserId)
-          .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
-          .get();
 
-      final count = snap.docs.length + 1;
-      return count.toString().padLeft(2, '0');
+      QuerySnapshot<Map<String, dynamic>> snap;
+      try {
+        snap = await _db
+            .collection(_collectionTransactions)
+            .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+            .get();
+      } catch (_) {
+        // Fallback jika query index Firestore bermasalah, ambil seluruh transaksi dan filter di memori
+        snap = await _db.collection(_collectionTransactions).get();
+      }
+
+      int count = 0;
+      for (final doc in snap.docs) {
+        final data = doc.data();
+        final createdAt = (data['created_at'] is Timestamp)
+            ? (data['created_at'] as Timestamp).toDate()
+            : null;
+
+        final isToday = createdAt != null &&
+            createdAt.year == now.year &&
+            createdAt.month == now.month &&
+            createdAt.day == now.day;
+
+        if (isToday) {
+          count++;
+        }
+      }
+      return (count + 1).toString().padLeft(2, '0');
     } catch (_) {
-      final fallback = (DateTime.now().minute + 1).toString().padLeft(2, '0');
-      return fallback;
+      // Fallback aman: selalu mulai dari '01'
+      return '01';
     }
   }
 

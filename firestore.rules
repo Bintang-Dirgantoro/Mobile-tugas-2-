@@ -62,7 +62,8 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() &&
                        hasRequiredFields(['product_id', 'product_name', 'type', 'quantity', 'reason', 'user_id']);
-      allow update, delete: if false; // Log mutasi stok bersifat audit trail immutable
+      allow update: if false; // Log mutasi stok tidak boleh diubah sembarangan
+      allow delete: if isAuthenticated(); // Izinkan penghapusan saat reset database oleh user berwenang
     }
   }
 }

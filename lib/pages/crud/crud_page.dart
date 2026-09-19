@@ -7,8 +7,8 @@ import 'crud_form_page.dart';
 import 'time_filter_helper.dart';
 import 'adjust_stock_dialog.dart';
 import 'cashier_view.dart';
-import 'history_view.dart';
 import 'summary_view.dart';
+import 'widgets/inventory_history_sheet.dart';
 
 /// Halaman Utama Operasional Bisnis & Kasir UMKM (Sistem Warmindo)
 /// 
@@ -32,8 +32,6 @@ class _CrudPageState extends State<CrudPage> {
     symbol: 'Rp ',
     decimalDigits: 0,
   );
-
-  final DateFormat _dateTimeFormat = DateFormat('dd MMM yyyy, HH:mm', 'id_ID');
 
   // Filter untuk Tab Katalog Menu
   String _catalogSearchQuery = '';
@@ -61,6 +59,99 @@ class _CrudPageState extends State<CrudPage> {
   }
 
   bool _isLoadingPreset = false;
+  bool _isResettingDatabase = false;
+
+  // Reset Database Firestore (Membersihkan seluruh data tanpa menyentuh Auth)
+  Future<void> _resetFirestore() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: AppColors.danger),
+            SizedBox(width: 8),
+            Text('Reset Database?', style: TextStyle(color: AppColors.danger, fontSize: 18, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Aksi ini akan mengosongkan seluruh data di Cloud Firestore:',
+              style: TextStyle(color: AppColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              '• Seluruh riwayat transaksi kasir\n• Seluruh catatan mutasi stok\n• Seluruh master menu & produk',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppColors.success.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.shield_outlined, color: AppColors.success, size: 18),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Akun login (Firebase Auth) Anda TETAP AMAN dan tidak akan terhapus.',
+                      style: TextStyle(color: AppColors.success, fontSize: 11, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal', style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
+            child: const Text('Ya, Kosongkan', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() => _isResettingDatabase = true);
+    try {
+      await _firestoreService.resetFirestoreDatabase(reseedWithPresets: false);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Database Firestore berhasil dikosongkan!'),
+          backgroundColor: AppColors.success,
+          duration: Duration(seconds: 3),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal mengosongkan database: $e'),
+          backgroundColor: AppColors.danger,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isResettingDatabase = false);
+      }
+    }
+  }
 
   // Memuat Template Menu Starter Warmindo secara instan ke Firestore
   Future<void> _loadPresetMenu() async {
@@ -169,111 +260,7 @@ class _CrudPageState extends State<CrudPage> {
 
   // Modal Riwayat Mutasi Stok Keseluruhan
   void _showMovementHistoryModal() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: AppColors.card,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) {
-        return DraggableScrollableSheet(
-          expand: false,
-          initialChildSize: 0.7,
-          maxChildSize: 0.9,
-          builder: (context, scrollController) {
-            return Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Row(
-                        children: [
-                          Icon(Icons.swap_vert, color: AppColors.accent),
-                          SizedBox(width: 8),
-                          Text(
-                            'Log Riwayat Mutasi Stok',
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-                          ),
-                        ],
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close, color: AppColors.textSecondary),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Audit trail perubahan stok masuk (IN) dan keluar (OUT)',
-                    style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                  ),
-                  const SizedBox(height: 14),
-                  const Divider(color: AppColors.border, height: 1),
-                  Expanded(
-                    child: StreamBuilder<List<InventoryMovement>>(
-                      stream: _firestoreService.getInventoryMovementsStream(),
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
-                          return const Center(child: CircularProgressIndicator(color: AppColors.accent));
-                        }
-                        final list = snapshot.data ?? [];
-                        if (list.isEmpty) {
-                          return const Center(
-                            child: Text('Belum ada riwayat mutasi stok tercatat', style: TextStyle(color: AppColors.textSecondary)),
-                          );
-                        }
-
-                        return ListView.separated(
-                          controller: scrollController,
-                          itemCount: list.length,
-                          separatorBuilder: (context, index) => const Divider(color: AppColors.border, height: 1),
-                          itemBuilder: (context, index) {
-                            final mov = list[index];
-                            final isIN = mov.type == 'IN';
-
-                            return ListTile(
-                              contentPadding: const EdgeInsets.symmetric(vertical: 4),
-                              leading: CircleAvatar(
-                                backgroundColor: (isIN ? AppColors.success : AppColors.danger).withValues(alpha: 0.15),
-                                child: Icon(
-                                  isIN ? Icons.arrow_downward : Icons.arrow_upward,
-                                  color: isIN ? AppColors.success : AppColors.danger,
-                                  size: 18,
-                                ),
-                              ),
-                              title: Text(
-                                mov.productName,
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.textPrimary),
-                              ),
-                              subtitle: Text(
-                                '${mov.reason} • ${_dateTimeFormat.format(mov.createdAt)}',
-                                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
-                              ),
-                              trailing: Text(
-                                isIN ? '+${mov.quantity}' : '-${mov.quantity}',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 15,
-                                  color: isIN ? AppColors.success : AppColors.danger,
-                                ),
-                              ),
-                            );
-                          },
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
+    InventoryHistorySheet.show(context);
   }
 
   // Tab 2: Katalog Menu & Stok
@@ -324,25 +311,6 @@ class _CrudPageState extends State<CrudPage> {
                         onChanged: (val) {
                           setState(() => _catalogSearchQuery = val.toLowerCase().trim());
                         },
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: AppColors.background,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppColors.border),
-                      ),
-                      child: IconButton(
-                        tooltip: 'Muat Template ${MenuPresets.templateName}',
-                        icon: _isLoadingPreset
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.accent),
-                              )
-                            : const Icon(Icons.playlist_add, color: AppColors.accent),
-                        onPressed: _isLoadingPreset ? null : _loadPresetMenu,
                       ),
                     ),
                   ],
@@ -609,7 +577,7 @@ class _CrudPageState extends State<CrudPage> {
                                 ),
                                 icon: const Icon(Icons.tune, size: 16, color: AppColors.accent),
                                 label: const Text(
-                                  'Atur Stok (Restock / Mutasi Keluar)',
+                                  'Atur Stok',
                                   style: TextStyle(color: AppColors.accent, fontSize: 12, fontWeight: FontWeight.bold),
                                 ),
                               ),
@@ -628,7 +596,7 @@ class _CrudPageState extends State<CrudPage> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 4,
+      length: 3,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Operasional Bisnis UMKM'),
@@ -639,18 +607,26 @@ class _CrudPageState extends State<CrudPage> {
               tooltip: 'Riwayat Mutasi Stok',
               onPressed: _showMovementHistoryModal,
             ),
+            IconButton(
+              icon: _isResettingDatabase
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.danger),
+                    )
+                  : const Icon(Icons.restart_alt, color: AppColors.danger),
+              tooltip: 'Reset Database',
+              onPressed: _isResettingDatabase ? null : _resetFirestore,
+            ),
           ],
           bottom: const TabBar(
-            isScrollable: true,
-            tabAlignment: TabAlignment.start,
             indicatorColor: AppColors.accent,
             labelColor: AppColors.accent,
             unselectedLabelColor: AppColors.textSecondary,
             labelStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
             tabs: [
-              Tab(icon: Icon(Icons.point_of_sale), text: 'Kasir Penjualan'),
+              Tab(icon: Icon(Icons.point_of_sale_rounded), text: 'Kasir & Transaksi'),
               Tab(icon: Icon(Icons.inventory_2_outlined), text: 'Katalog & Stok'),
-              Tab(icon: Icon(Icons.receipt_long_outlined), text: 'Riwayat Transaksi'),
               Tab(icon: Icon(Icons.analytics_outlined), text: 'Ringkasan Bisnis'),
             ],
           ),
@@ -685,13 +661,13 @@ class _CrudPageState extends State<CrudPage> {
 
             return TabBarView(
               children: [
-                CashierView(allProducts: allProducts),
-                _buildCatalogTab(allProducts),
-                HistoryView(
+                CashierView(
+                  allProducts: allProducts,
                   selectedPeriod: _sharedPeriod,
                   customRange: _sharedCustomRange,
                   onPeriodChanged: _onPeriodChanged,
                 ),
+                _buildCatalogTab(allProducts),
                 SummaryView(
                   selectedPeriod: _sharedPeriod,
                   customRange: _sharedCustomRange,

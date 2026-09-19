@@ -4,21 +4,22 @@ import '../../services/firestore_service.dart';
 import '../../theme/app_colors.dart';
 import 'payment_bottom_sheet.dart';
 import 'pos_order_page.dart';
+import 'time_filter_helper.dart';
+import 'widgets/receipt_detail_sheet.dart';
 
-/// Tampilan Kasir & Penjualan (Halaman Utama Kasir Mobile)
-///
-/// Fitur:
-/// 1. Default tampilan langsung ke 'Menunggu Bayar' (fokus kasir pada transaksi aktif).
-/// 2. Pencarian cepat berdasarkan Nama Pelanggan / Nomor Meja / Nomor Struk.
-/// 3. Tombol besar '+ Transaksi Baru' untuk membuka layar POS mobile.
-/// 4. Kartu transaksi menampilkan nama pelanggan/meja dengan jelas.
-/// 5. Tombol 'Bayar / Lunasi' untuk pelunasan instan via QRIS/Tunai & Gojek Slide to Pay.
+/// Tampilan Kasir & Transaksi (Operasional Terpadu: Kasir POS, Antrean Stash, & Riwayat Transaksi)
 class CashierView extends StatefulWidget {
   final List<ProductItem> allProducts;
+  final TimeFilterPeriod selectedPeriod;
+  final DateTimeRange? customRange;
+  final Function(TimeFilterPeriod, DateTimeRange?) onPeriodChanged;
 
   const CashierView({
     super.key,
     required this.allProducts,
+    required this.selectedPeriod,
+    required this.customRange,
+    required this.onPeriodChanged,
   });
 
   @override
@@ -35,7 +36,6 @@ class _CashierViewState extends State<CashierView> {
   );
 
   final DateFormat _timeFormat = DateFormat('HH:mm', 'id_ID');
-  final DateFormat _dateFormat = DateFormat('dd MMM yyyy, HH:mm', 'id_ID');
 
   // Default tampilan kasir: 'Semua' (dengan penanda khusus jika ada pesanan tertahan)
   String _statusFilter = 'Semua';
@@ -97,188 +97,22 @@ class _CashierViewState extends State<CashierView> {
   }
 
   void _showDetailSheet(TransactionModel trx) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: AppColors.card,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) {
-        return Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        trx.customerName,
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '${trx.transactionCode} • ${_dateFormat.format(trx.createdAt)}',
-                        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                      ),
-                    ],
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: AppColors.textSecondary),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-
-              // Status Badge & Metode
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: (trx.isPaid ? AppColors.success : AppColors.warning).withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: trx.isPaid ? AppColors.success : AppColors.warning),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          trx.isPaid ? Icons.check_circle : Icons.hourglass_top_rounded,
-                          size: 14,
-                          color: trx.isPaid ? AppColors.success : AppColors.warning,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          trx.isPaid ? 'LUNAS' : 'MENUNGGU PEMBAYARAN',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: trx.isPaid ? AppColors.success : AppColors.warning,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (trx.isPaid && trx.paymentMethod != null) ...[
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppColors.background,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: AppColors.border),
-                      ),
-                      child: Text(
-                        trx.paymentMethod!,
-                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-
-              const SizedBox(height: 14),
-              const Divider(color: AppColors.border, height: 1),
-              const SizedBox(height: 12),
-
-              const Text(
-                'Daftar Menu Pesanan:',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: 8),
-
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 200),
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  itemCount: trx.items.length,
-                  separatorBuilder: (context, index) => const Divider(color: AppColors.border, height: 1),
-                  itemBuilder: (context, index) {
-                    final it = trx.items[index];
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(it.productName, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-                                Text(
-                                  '${_currency.format(it.sellingPrice)} × ${it.quantity} unit',
-                                  style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Text(
-                            _currency.format(it.subtotal),
-                            style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimary),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              ),
-
-              const SizedBox(height: 14),
-              const Divider(color: AppColors.border, height: 1),
-              const SizedBox(height: 12),
-
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('Total Tagihan:', style: TextStyle(color: AppColors.textSecondary)),
-                  Text(
-                    _currency.format(trx.totalAmount),
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.success),
-                  ),
-                ],
-              ),
-
-              if (trx.isPending) ...[
-                const SizedBox(height: 18),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      PaymentBottomSheet.show(
-                        context,
-                        transactionId: trx.id,
-                        transactionCode: trx.transactionCode,
-                        totalAmount: trx.totalAmount,
-                        totalItems: trx.totalItems,
-                        items: trx.items,
-                        onSettled: () => setState(() {}),
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF10B981),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    icon: const Icon(Icons.payments_outlined, size: 18),
-                    label: const Text(
-                      'Bayar Sekarang (QRIS / Tunai)',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        );
-      },
+    ReceiptDetailSheet.show(
+      context,
+      trx: trx,
+      onPayPressed: trx.isPending
+          ? () {
+              PaymentBottomSheet.show(
+                context,
+                transactionId: trx.id,
+                transactionCode: trx.transactionCode,
+                totalAmount: trx.totalAmount,
+                totalItems: trx.totalItems,
+                items: trx.items,
+                onSettled: () => setState(() {}),
+              );
+            }
+          : null,
     );
   }
 
@@ -305,7 +139,7 @@ class _CashierViewState extends State<CashierView> {
               ),
               icon: const Icon(Icons.point_of_sale_rounded, size: 22),
               label: const Text(
-                '+ Transaksi Baru (Buka POS)',
+                '+ Transaksi Baru',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
               ),
             ),
@@ -320,28 +154,43 @@ class _CashierViewState extends State<CashierView> {
           }
 
           final allTransactions = snapshot.data ?? [];
+          final range = TimeFilterHelper.getRange(widget.selectedPeriod, widget.customRange);
 
-          int pendingCount = 0;
-          int paidCount = 0;
-          double pendingAmount = 0.0;
+          // 1. Antrean tertahan tidak boleh terpotong filter waktu agar kasir tidak lupa
+          final pendingTransactions = allTransactions.where((t) => t.isPending).toList();
+          final int pendingCount = pendingTransactions.length;
+          final double pendingAmount = pendingTransactions.fold(0.0, (sum, t) => sum + t.totalAmount);
 
-          for (final t in allTransactions) {
-            if (t.isPaid) {
-              paidCount++;
-            } else {
-              pendingCount++;
-              pendingAmount += t.totalAmount;
+          // 2. Transaksi dalam rentang waktu yang dipilih
+          final periodTransactions = allTransactions.where((t) {
+            return t.createdAt.isAfter(range.start) && t.createdAt.isBefore(range.end);
+          }).toList();
+
+          final paidPeriodTransactions = periodTransactions.where((t) => t.isPaid).toList();
+          final int paidCount = paidPeriodTransactions.length;
+          final double totalPeriodRevenue = paidPeriodTransactions.fold(0.0, (sum, t) => sum + t.totalAmount);
+
+          // 3. Tentukan daftar transaksi berdasarkan filter status ('Semua', 'Tertahan', 'Lunas')
+          List<TransactionModel> targetList;
+          if (_statusFilter == 'Tertahan') {
+            targetList = pendingTransactions;
+          } else if (_statusFilter == 'Lunas') {
+            targetList = paidPeriodTransactions;
+          } else {
+            // 'Semua': Gabungan antrean tertahan + riwayat transaksi pada periode aktif
+            final Set<String> seenIds = {};
+            targetList = [];
+            for (final t in pendingTransactions) {
+              if (seenIds.add(t.id)) targetList.add(t);
             }
+            for (final t in periodTransactions) {
+              if (seenIds.add(t.id)) targetList.add(t);
+            }
+            targetList.sort((a, b) => b.createdAt.compareTo(a.createdAt));
           }
 
-          // Filter berdasarkan status tab ('Semua', 'Tertahan (Stash)', 'Lunas')
-          // dan pencarian nama pelanggan / nomor meja / struk
-          final displayList = allTransactions.where((t) {
-            // Filter Status
-            if (_statusFilter == 'Tertahan (Stash)' && !t.isPending) return false;
-            if (_statusFilter == 'Lunas' && !t.isPaid) return false;
-
-            // Filter Pencarian
+          // 4. Filter pencarian cepat
+          final displayList = targetList.where((t) {
             if (_searchQuery.isNotEmpty) {
               final query = _searchQuery.toLowerCase();
               final matchName = t.customerName.toLowerCase().contains(query);
@@ -355,19 +204,27 @@ class _CashierViewState extends State<CashierView> {
 
           return Column(
             children: [
-              // Header Kasir Bar: Pencarian & Filter Status (Tombol Baru ada di Bawah)
+              // 1. Time Filter Bar (Hari Ini, Kemarin, 7 Hari, 30 Hari, Bulan Ini, Kustom)
+              TimeFilterHelper.buildFilterBar(
+                context: context,
+                selectedPeriod: widget.selectedPeriod,
+                customRange: widget.customRange,
+                onPeriodChanged: widget.onPeriodChanged,
+              ),
+
+              // 2. Header Bar: Pencarian, Status Filter, Omzet Periode, & Alert Stash
               Container(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
                 color: AppColors.card,
                 child: Column(
                   children: [
-                    // Pencarian Cepat Nama Pelanggan / Nomor Meja / Struk
+                    // Pencarian Cepat Nama Pelanggan / Nomor Antrean / Struk
                     SizedBox(
                       height: 38,
                       child: TextField(
                         style: const TextStyle(color: AppColors.textPrimary, fontSize: 13),
                         decoration: InputDecoration(
-                          hintText: 'Cari Meja / Antrean / Struk...',
+                          hintText: 'Cari Antrean atau Struk...',
                           hintStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
                           prefixIcon: const Icon(Icons.search, color: AppColors.accent, size: 18),
                           contentPadding: EdgeInsets.zero,
@@ -386,29 +243,59 @@ class _CashierViewState extends State<CashierView> {
 
                     const SizedBox(height: 10),
 
-                    // Filter Chip Bar: Semua (Default), Tertahan (Stash), Lunas
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          _buildFilterChip('Semua', '${allTransactions.length}'),
-                          const SizedBox(width: 8),
-                          _buildFilterChip(
-                            'Tertahan (Stash)',
-                            '$pendingCount',
-                            isAlert: pendingCount > 0,
+                    // Filter Chip Bar & Ringkasan Omzet Periode
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              children: [
+                                _buildFilterChip('Semua', '${targetList.length}'),
+                                const SizedBox(width: 8),
+                                _buildFilterChip(
+                                  'Tertahan',
+                                  '$pendingCount',
+                                  isAlert: pendingCount > 0,
+                                ),
+                                const SizedBox(width: 8),
+                                _buildFilterChip('Lunas', '$paidCount'),
+                              ],
+                            ),
                           ),
-                          const SizedBox(width: 8),
-                          _buildFilterChip('Lunas', '$paidCount'),
-                        ],
-                      ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: AppColors.success.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.check_circle_outline, size: 13, color: AppColors.success),
+                              const SizedBox(width: 4),
+                              Text(
+                                _currency.format(totalPeriodRevenue),
+                                style: const TextStyle(
+                                  color: AppColors.success,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
 
                     if (pendingCount > 0) ...[
                       const SizedBox(height: 10),
                       InkWell(
                         onTap: () {
-                          setState(() => _statusFilter = 'Tertahan (Stash)');
+                          setState(() => _statusFilter = 'Tertahan');
                         },
                         borderRadius: BorderRadius.circular(10),
                         child: Container(
@@ -424,7 +311,7 @@ class _CashierViewState extends State<CashierView> {
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
-                                  '$pendingCount Pesanan Tertahan (Stash) • ${_currency.format(pendingAmount)}',
+                                  '$pendingCount Pesanan Tertahan • ${_currency.format(pendingAmount)}',
                                   style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.warning),
                                 ),
                               ),
@@ -454,21 +341,14 @@ class _CashierViewState extends State<CashierView> {
                               ),
                               const SizedBox(height: 14),
                               Text(
-                                _statusFilter == 'Menunggu Bayar'
-                                    ? 'Tidak ada pesanan menunggu bayar'
+                                _statusFilter == 'Tertahan'
+                                    ? 'Tidak ada pesanan tertahan'
                                     : 'Tidak ada transaksi yang cocok',
                                 style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
                               ),
                               const SizedBox(height: 6),
                               Text(
-                                _statusFilter == 'Tertahan (Stash)'
-                                    ? 'Tidak ada pesanan tertahan (Stash)'
-                                    : 'Tidak ada transaksi yang cocok',
-                                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                _statusFilter == 'Tertahan (Stash)'
+                                _statusFilter == 'Tertahan'
                                     ? 'Semua pesanan tertahan sudah selesai dilunasi atau dibatalkan.'
                                     : 'Tekan tombol "+ Transaksi Baru" di bawah untuk melayani pelanggan.',
                                 textAlign: TextAlign.center,
@@ -547,7 +427,7 @@ class _CashierViewState extends State<CashierView> {
                                           child: Text(
                                             isPaid
                                                 ? (trx.paymentMethod != null ? 'LUNAS (${trx.paymentMethod})' : 'LUNAS')
-                                                : 'TERTAHAN (STASH)',
+                                                : 'TERTAHAN',
                                             style: TextStyle(
                                               fontSize: 10,
                                               fontWeight: FontWeight.bold,

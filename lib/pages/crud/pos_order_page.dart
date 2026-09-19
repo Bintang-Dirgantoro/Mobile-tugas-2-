@@ -34,11 +34,8 @@ class _PosOrderPageState extends State<PosOrderPage> {
     decimalDigits: 0,
   );
 
-  // Tipe Pesanan: 'DINE_IN' atau 'TAKE_AWAY'
+  // Tipe Kemasan: 'DINE_IN' (Makan di Sini) atau 'TAKE_AWAY' (Bungkus)
   String _orderType = 'DINE_IN';
-  String _selectedTable = 'Meja 1';
-  final TextEditingController _customTableController = TextEditingController();
-  final List<String> _tableOptions = ['Meja 1', 'Meja 2', 'Meja 3', 'Meja 4', 'Meja 5', 'Meja 6', 'Lesehan'];
   String _queueNumber = '01';
 
   String _searchQuery = '';
@@ -74,7 +71,6 @@ class _PosOrderPageState extends State<PosOrderPage> {
 
   @override
   void dispose() {
-    _customTableController.dispose();
     super.dispose();
   }
 
@@ -111,15 +107,8 @@ class _PosOrderPageState extends State<PosOrderPage> {
     return items;
   }
 
-  String get _resolvedCustomerName {
-    if (_orderType == 'DINE_IN') {
-      final custom = _customTableController.text.trim();
-      final table = custom.isNotEmpty ? custom : _selectedTable;
-      return '[Dine In] $table';
-    } else {
-      return '[Take Away] Antrean #$_queueNumber';
-    }
-  }
+  String get _packagingLabel => _orderType == 'DINE_IN' ? 'Makan di Sini' : 'Bungkus';
+  String get _resolvedCustomerName => 'Antrean #$_queueNumber ($_packagingLabel)';
 
   void _addItem(ProductItem product) {
     if (product.stock <= 0) {
@@ -171,12 +160,7 @@ class _PosOrderPageState extends State<PosOrderPage> {
     HapticFeedback.mediumImpact();
   }
 
-  String get _currentTableValue {
-    final custom = _customTableController.text.trim();
-    return custom.isNotEmpty ? custom : _selectedTable;
-  }
-
-  /// Tahan pesanan ke antrean kasir (Stash) - Stok TIDAK dipotong
+  /// Tahan pesanan ke antrean kasir (Tertahan) - Stok TIDAK dipotong
   Future<void> _stashOrder() async {
     final items = _buildTransactionItems();
     if (items.isEmpty) {
@@ -190,16 +174,14 @@ class _PosOrderPageState extends State<PosOrderPage> {
 
     try {
       final customer = _resolvedCustomerName;
-      final table = _orderType == 'DINE_IN' ? _currentTableValue : '';
-      final queue = _orderType == 'TAKE_AWAY' ? _queueNumber : '';
 
       final res = await _firestoreService.createSaleTransaction(
         items,
         customerName: customer,
         orderType: _orderType,
-        tableNumber: table,
-        queueNumber: queue,
-        status: 'MENUNGGU_PEMBAYARAN', // Stash / Tertahan (stok TIDAK dipotong)
+        tableNumber: '',
+        queueNumber: _queueNumber,
+        status: 'MENUNGGU_PEMBAYARAN',
       );
 
       if (!mounted) return;
@@ -207,7 +189,7 @@ class _PosOrderPageState extends State<PosOrderPage> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Pesanan ${res.code} ($customer) ditahan (Stash)! Stok belum dipotong.'),
+          content: Text('Pesanan ${res.code} ($customer) berhasil ditahan.'),
           backgroundColor: AppColors.warning,
           duration: const Duration(seconds: 3),
         ),
@@ -232,15 +214,13 @@ class _PosOrderPageState extends State<PosOrderPage> {
     }
 
     final customer = _resolvedCustomerName;
-    final table = _orderType == 'DINE_IN' ? _currentTableValue : '';
-    final queue = _orderType == 'TAKE_AWAY' ? _queueNumber : '';
 
     PaymentBottomSheet.show(
       context,
       customerName: customer,
       orderType: _orderType,
-      tableNumber: table,
-      queueNumber: queue,
+      tableNumber: '',
+      queueNumber: _queueNumber,
       totalAmount: _totalAmount,
       totalItems: _totalItems,
       items: items,
@@ -266,7 +246,7 @@ class _PosOrderPageState extends State<PosOrderPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Transaksi Baru (Kasir POS)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        title: const Text('Kasir POS', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         actions: [
           if (_cart.isNotEmpty)
             TextButton(
@@ -277,172 +257,84 @@ class _PosOrderPageState extends State<PosOrderPage> {
       ),
       body: Column(
         children: [
-          // 1. Pemilihan Tipe Pesanan: Dine In vs Take Away
+          // 1. Header Nomor Antrean & Pilihan Kemasan
           Container(
-            padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             color: AppColors.card,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // Toggle Tipe Pesanan
+                // Info Antrean Hari Ini
                 Row(
                   children: [
-                    Expanded(
-                      child: InkWell(
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          setState(() => _orderType = 'DINE_IN');
-                        },
-                        borderRadius: BorderRadius.circular(10),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 9),
-                          decoration: BoxDecoration(
-                            color: _orderType == 'DINE_IN'
-                                ? AppColors.accent.withValues(alpha: 0.15)
-                                : AppColors.background,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: _orderType == 'DINE_IN' ? AppColors.accent : AppColors.border,
-                              width: _orderType == 'DINE_IN' ? 1.5 : 1,
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.restaurant_rounded,
-                                size: 18,
-                                color: _orderType == 'DINE_IN' ? AppColors.accent : AppColors.textSecondary,
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                'Dine In (Makan di Sini)',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: _orderType == 'DINE_IN' ? FontWeight.bold : FontWeight.normal,
-                                  color: _orderType == 'DINE_IN' ? AppColors.accent : AppColors.textSecondary,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                    Container(
+                      padding: const EdgeInsets.all(7),
+                      decoration: BoxDecoration(
+                        color: AppColors.accent.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(
+                        Icons.confirmation_number_rounded,
+                        color: AppColors.accent,
+                        size: 20,
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: InkWell(
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          setState(() => _orderType = 'TAKE_AWAY');
-                        },
-                        borderRadius: BorderRadius.circular(10),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 9),
-                          decoration: BoxDecoration(
-                            color: _orderType == 'TAKE_AWAY'
-                                ? AppColors.accent.withValues(alpha: 0.15)
-                                : AppColors.background,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: _orderType == 'TAKE_AWAY' ? AppColors.accent : AppColors.border,
-                              width: _orderType == 'TAKE_AWAY' ? 1.5 : 1,
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.takeout_dining_rounded,
-                                size: 18,
-                                color: _orderType == 'TAKE_AWAY' ? AppColors.accent : AppColors.textSecondary,
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                'Take Away (Bungkus)',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: _orderType == 'TAKE_AWAY' ? FontWeight.bold : FontWeight.normal,
-                                  color: _orderType == 'TAKE_AWAY' ? AppColors.accent : AppColors.textSecondary,
-                                ),
-                              ),
-                            ],
+                    const SizedBox(width: 10),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Nomor Antrean',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppColors.textSecondary,
                           ),
                         ),
-                      ),
+                        Text(
+                          'Antrean #$_queueNumber',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
 
-                const SizedBox(height: 8),
-
-                // Detail Identifikasi sesuai Tipe Pesanan
-                if (_orderType == 'DINE_IN') ...[
-                  // Chip Pilihan Meja Cepat
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: _tableOptions.map((t) {
-                        final isSel = _selectedTable == t && _customTableController.text.isEmpty;
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 6),
-                          child: ChoiceChip(
-                            label: Text(t),
-                            selected: isSel,
-                            selectedColor: AppColors.accent.withValues(alpha: 0.25),
-                            labelStyle: TextStyle(
-                              color: isSel ? AppColors.accent : AppColors.textSecondary,
-                              fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
-                              fontSize: 11,
-                            ),
-                            backgroundColor: AppColors.background,
-                            side: BorderSide(color: isSel ? AppColors.accent : AppColors.border),
-                            onSelected: (val) {
-                              if (val) {
-                                setState(() {
-                                  _selectedTable = t;
-                                  _customTableController.clear();
-                                });
-                              }
-                            },
-                          ),
-                        );
-                      }).toList(),
-                    ),
+                // Pilihan Kemasan Cepat: Makan di Sini vs Bungkus
+                Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.background,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.border),
                   ),
-                ] else ...[
-                  // Lencana Nomor Antrean Take Away
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                    decoration: BoxDecoration(
-                      color: AppColors.background,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.confirmation_number_outlined, size: 16, color: AppColors.accent),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Nomor Antrean: Antrean #$_queueNumber',
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary),
-                            ),
-                          ],
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: AppColors.accent.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: const Text('Otomatis', style: TextStyle(color: AppColors.accent, fontSize: 10, fontWeight: FontWeight.bold)),
-                        ),
-                      ],
-                    ),
+                  padding: const EdgeInsets.all(3),
+                  child: Row(
+                    children: [
+                      _buildPackagingChip(
+                        title: 'Makan di Sini',
+                        icon: Icons.restaurant_rounded,
+                        isSelected: _orderType == 'DINE_IN',
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                          setState(() => _orderType = 'DINE_IN');
+                        },
+                      ),
+                      const SizedBox(width: 4),
+                      _buildPackagingChip(
+                        title: 'Bungkus',
+                        icon: Icons.takeout_dining_rounded,
+                        isSelected: _orderType == 'TAKE_AWAY',
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                          setState(() => _orderType = 'TAKE_AWAY');
+                        },
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ],
             ),
           ),
@@ -520,144 +412,158 @@ class _PosOrderPageState extends State<PosOrderPage> {
                   ),
                 ),
 
-                // List Menu Produk dengan Tombol + dan - BESAR
+                // Grid Menu Produk (Kotak-Kotak Modern)
                 Expanded(
                   child: filtered.isEmpty
                       ? const Center(
                           child: Text('Menu tidak ditemukan', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
                         )
-                      : ListView.builder(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      : GridView.builder(
+                          padding: const EdgeInsets.fromLTRB(10, 6, 10, 10),
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 3,
+                            crossAxisSpacing: 6,
+                            mainAxisSpacing: 6,
+                            childAspectRatio: 0.92,
+                          ),
                           itemCount: filtered.length,
                           itemBuilder: (context, index) {
                             final p = filtered[index];
                             final inCartQty = _cart[p.id] ?? 0;
                             final isOutOfStock = p.stock <= 0;
+                            final isSelected = inCartQty > 0;
 
-                            return InkWell(
-                              borderRadius: BorderRadius.circular(12),
-                              onTap: () {
-                                if (isOutOfStock) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('Stok "${p.name}" habis!'),
-                                      backgroundColor: AppColors.danger,
-                                      duration: const Duration(seconds: 1),
+                            return Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(10),
+                                onTap: () {
+                                  if (isOutOfStock) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Stok "${p.name}" habis!'),
+                                        backgroundColor: AppColors.danger,
+                                        duration: const Duration(seconds: 1),
+                                      ),
+                                    );
+                                    return;
+                                  }
+                                  if (inCartQty == 0) {
+                                    _addItem(p);
+                                  } else {
+                                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('"${p.name}" sudah dipilih ($inCartQty). Ubah jumlah di bawah.'),
+                                        backgroundColor: AppColors.card,
+                                        behavior: SnackBarBehavior.floating,
+                                        duration: const Duration(milliseconds: 1200),
+                                      ),
+                                    );
+                                  }
+                                },
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 150),
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: isSelected
+                                        ? AppColors.accent.withValues(alpha: 0.12)
+                                        : AppColors.card,
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: isSelected
+                                          ? AppColors.accent
+                                          : (isOutOfStock ? AppColors.border.withValues(alpha: 0.4) : AppColors.border),
+                                      width: isSelected ? 1.8 : 1.0,
                                     ),
-                                  );
-                                  return;
-                                }
-                                if (inCartQty == 0) {
-                                  _addItem(p);
-                                } else {
-                                  // Sudah terpilih, klik lagi TIDAK menambah item (penambahan hanya lewat tombol +/- di bawah)
-                                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('"${p.name}" sudah dipilih. Ubah jumlah via tombol [+] / [-] di panel bawah.'),
-                                      backgroundColor: AppColors.card,
-                                      behavior: SnackBarBehavior.floating,
-                                      duration: const Duration(milliseconds: 1500),
-                                    ),
-                                  );
-                                }
-                              },
-                              child: Container(
-                                margin: const EdgeInsets.only(bottom: 8),
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: AppColors.card,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: inCartQty > 0 ? AppColors.accent : AppColors.border,
-                                    width: inCartQty > 0 ? 1.5 : 1,
                                   ),
-                                ),
-                                child: Row(
-                                  children: [
-                                    // Icon Kategori
-                                    Container(
-                                      width: 38,
-                                      height: 38,
-                                      decoration: BoxDecoration(
-                                        color: AppColors.accent.withValues(alpha: 0.12),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Icon(_getCategoryIcon(p.category), color: AppColors.accent, size: 20),
-                                    ),
-                                    const SizedBox(width: 10),
-
-                                    // Detail Produk (Nama, Harga, Sisa Stok)
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      // Baris 1: Ikon Kategori & Badge Stok
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                         children: [
-                                          Text(
-                                            p.name,
-                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Row(
-                                            children: [
-                                              Text(
-                                                _currency.format(p.sellingPrice),
-                                                style: const TextStyle(color: AppColors.success, fontWeight: FontWeight.bold, fontSize: 12),
-                                              ),
-                                              const SizedBox(width: 8),
-                                              Text(
-                                                isOutOfStock ? 'Habis' : 'Stok: ${p.stock}',
-                                                style: TextStyle(
-                                                  fontSize: 10,
-                                                  color: isOutOfStock ? AppColors.danger : AppColors.textSecondary,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-
-                                    // Indikator Select (Hanya Select, tidak ada tombol +/- di bagian atas)
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                      decoration: BoxDecoration(
-                                        color: inCartQty > 0
-                                            ? AppColors.accent.withValues(alpha: 0.15)
-                                            : (isOutOfStock ? AppColors.background : AppColors.card),
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(
-                                          color: inCartQty > 0
-                                              ? AppColors.accent
-                                              : (isOutOfStock ? AppColors.border : AppColors.accent.withValues(alpha: 0.5)),
-                                          width: inCartQty > 0 ? 1.5 : 1,
-                                        ),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          if (inCartQty > 0) ...[
-                                            const Icon(Icons.check_circle_rounded, color: AppColors.accent, size: 16),
-                                            const SizedBox(width: 4),
-                                            const Text(
-                                              'Terpilih',
-                                              style: TextStyle(color: AppColors.accent, fontWeight: FontWeight.bold, fontSize: 12),
+                                          Container(
+                                            width: 26,
+                                            height: 26,
+                                            decoration: BoxDecoration(
+                                              color: isSelected
+                                                  ? AppColors.accent
+                                                  : AppColors.accent.withValues(alpha: 0.12),
+                                              borderRadius: BorderRadius.circular(6),
                                             ),
-                                          ] else ...[
-                                            Text(
-                                              isOutOfStock ? 'Habis' : 'Pilih',
+                                            child: Icon(
+                                              _getCategoryIcon(p.category),
+                                              color: isSelected ? Colors.white : AppColors.accent,
+                                              size: 14,
+                                            ),
+                                          ),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                            decoration: BoxDecoration(
+                                              color: (isOutOfStock
+                                                      ? AppColors.danger
+                                                      : (isSelected ? AppColors.accent : AppColors.background))
+                                                  .withValues(alpha: 0.15),
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                            child: Text(
+                                              isOutOfStock ? 'Habis' : (isSelected ? '×$inCartQty' : '${p.stock}'),
                                               style: TextStyle(
-                                                color: isOutOfStock ? AppColors.textSecondary : AppColors.accent,
+                                                fontSize: 9,
                                                 fontWeight: FontWeight.bold,
-                                                fontSize: 12,
+                                                color: isOutOfStock
+                                                    ? AppColors.danger
+                                                    : (isSelected ? AppColors.accent : AppColors.textSecondary),
                                               ),
                                             ),
-                                          ],
+                                          ),
                                         ],
                                       ),
-                                    ),
-                                  ],
+
+                                      // Baris 2: Nama Menu (2 Baris Rapi)
+                                      Text(
+                                        p.name,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 11,
+                                          height: 1.2,
+                                          color: isOutOfStock ? AppColors.textSecondary : AppColors.textPrimary,
+                                        ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+
+                                      // Baris 3: Harga & Status Centang
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              _currency.format(p.sellingPrice),
+                                              style: TextStyle(
+                                                color: isOutOfStock ? AppColors.textSecondary : AppColors.success,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 10.5,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          if (isSelected)
+                                            const Icon(Icons.check_circle_rounded, color: AppColors.accent, size: 14)
+                                          else
+                                            Icon(
+                                              Icons.add_circle_outline_rounded,
+                                              color: isOutOfStock ? AppColors.border : AppColors.accent.withValues(alpha: 0.6),
+                                              size: 14,
+                                            ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             );
@@ -864,8 +770,8 @@ class _PosOrderPageState extends State<PosOrderPage> {
                                     ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.warning))
                                     : const Icon(Icons.pause_circle_outline_rounded, color: AppColors.warning, size: 18),
                                 label: const Text(
-                                  'Tahan (Stash)',
-                                  style: TextStyle(color: AppColors.warning, fontWeight: FontWeight.bold, fontSize: 12),
+                                  'Tahan',
+                                  style: TextStyle(color: AppColors.warning, fontWeight: FontWeight.bold, fontSize: 13),
                                 ),
                               ),
                             ),
@@ -885,7 +791,7 @@ class _PosOrderPageState extends State<PosOrderPage> {
                                 ),
                                 icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
                                 label: Text(
-                                  'Bayar Langsung • ${_currency.format(_totalAmount)}',
+                                  'Bayar • ${_currency.format(_totalAmount)}',
                                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                                 ),
                               ),
@@ -900,6 +806,45 @@ class _PosOrderPageState extends State<PosOrderPage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildPackagingChip({
+    required String title,
+    required IconData icon,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.accent : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 14,
+              color: isSelected ? Colors.white : AppColors.textSecondary,
+            ),
+            const SizedBox(width: 5),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                color: isSelected ? Colors.white : AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
