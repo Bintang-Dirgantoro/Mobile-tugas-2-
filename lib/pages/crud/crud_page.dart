@@ -3,15 +3,19 @@ import 'package:intl/intl.dart';
 import '../../services/firestore_service.dart';
 import '../../theme/app_colors.dart';
 import 'crud_form_page.dart';
+import 'time_filter_helper.dart';
+import 'adjust_stock_dialog.dart';
+import 'cashier_view.dart';
+import 'history_view.dart';
+import 'summary_view.dart';
 
-/// Halaman Daftar Produk UMKM (Cloud Firestore CRUD)
+/// Halaman Utama Operasional Bisnis & Kasir UMKM (Sistem Warmindo)
 /// 
-/// Fitur:
-/// 1. Create: Tambah produk melalui FloatingActionButton -> CrudFormPage.
-/// 2. Read: Realtime stream data dari Firestore dengan indikator loading & empty state.
-/// 3. Update: Edit data produk yang sudah ada.
-/// 4. Delete: Hapus produk dengan konfirmasi dialog agar tidak terhapus tidak sengaja.
-/// 5. Pencarian & Filter: Pencarian nama produk & filter kategori.
+/// Mengintegrasikan 4 modul utama:
+/// 1. Kasir Penjualan (POS Warmindo)
+/// 2. Katalog Menu & Stok (Master Produk & Mutasi Stok)
+/// 3. Riwayat Transaksi (Aplikasi Perbankan dengan Filter Waktu)
+/// 4. Ringkasan Penjualan (Sales Summary berdasarkan Periode Waktu)
 class CrudPage extends StatefulWidget {
   const CrudPage({super.key});
 
@@ -21,16 +25,19 @@ class CrudPage extends StatefulWidget {
 
 class _CrudPageState extends State<CrudPage> {
   final FirestoreService _firestoreService = FirestoreService();
+
   final NumberFormat _currency = NumberFormat.currency(
     locale: 'id_ID',
     symbol: 'Rp ',
     decimalDigits: 0,
   );
 
-  String _searchQuery = '';
-  String _selectedFilterCategory = 'Semua';
+  final DateFormat _dateTimeFormat = DateFormat('dd MMM yyyy, HH:mm', 'id_ID');
 
-  final List<String> _filterCategories = [
+  // Filter untuk Tab Katalog Menu
+  String _catalogSearchQuery = '';
+  String _catalogSelectedCategory = 'Semua';
+  final List<String> _catalogCategories = [
     'Semua',
     'Makanan',
     'Minuman',
@@ -41,14 +48,26 @@ class _CrudPageState extends State<CrudPage> {
     'Lainnya'
   ];
 
-  Future<void> _confirmDelete(ProductItem item) async {
+  // State Bersama Filter Waktu (Riwayat & Summary)
+  TimeFilterPeriod _sharedPeriod = TimeFilterPeriod.today;
+  DateTimeRange? _sharedCustomRange;
+
+  void _onPeriodChanged(TimeFilterPeriod period, DateTimeRange? custom) {
+    setState(() {
+      _sharedPeriod = period;
+      _sharedCustomRange = custom;
+    });
+  }
+
+  // Dialog Konfirmasi Hapus Produk Master
+  Future<void> _confirmDeleteProduct(ProductItem item) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.card,
-        title: const Text('Hapus Produk?', style: TextStyle(color: AppColors.danger)),
+        title: const Text('Hapus Master Menu?', style: TextStyle(color: AppColors.danger)),
         content: Text(
-          'Apakah Anda yakin ingin menghapus "${item.name}" dari database?',
+          'Yakin ingin menghapus "${item.name}" dari katalog?\nData master menu ini tidak akan bisa dipesan lagi.',
           style: const TextStyle(color: AppColors.textPrimary),
         ),
         actions: [
@@ -71,7 +90,7 @@ class _CrudPageState extends State<CrudPage> {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Produk "${item.name}" berhasil dihapus'),
+            content: Text('Menu "${item.name}" berhasil dihapus'),
             backgroundColor: AppColors.success,
           ),
         );
@@ -87,12 +106,124 @@ class _CrudPageState extends State<CrudPage> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Kelola Produk UMKM (CRUD)'),
+  // Modal Riwayat Mutasi Stok Keseluruhan
+  void _showMovementHistoryModal() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.card,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.7,
+          maxChildSize: 0.9,
+          builder: (context, scrollController) {
+            return Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.swap_vert, color: AppColors.accent),
+                          SizedBox(width: 8),
+                          Text(
+                            'Log Riwayat Mutasi Stok',
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                          ),
+                        ],
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: AppColors.textSecondary),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Audit trail perubahan stok masuk (IN) dan keluar (OUT)',
+                    style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                  ),
+                  const SizedBox(height: 14),
+                  const Divider(color: AppColors.border, height: 1),
+                  Expanded(
+                    child: StreamBuilder<List<InventoryMovement>>(
+                      stream: _firestoreService.getInventoryMovementsStream(),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Center(child: CircularProgressIndicator(color: AppColors.accent));
+                        }
+                        final list = snapshot.data ?? [];
+                        if (list.isEmpty) {
+                          return const Center(
+                            child: Text('Belum ada riwayat mutasi stok tercatat', style: TextStyle(color: AppColors.textSecondary)),
+                          );
+                        }
+
+                        return ListView.separated(
+                          controller: scrollController,
+                          itemCount: list.length,
+                          separatorBuilder: (context, index) => const Divider(color: AppColors.border, height: 1),
+                          itemBuilder: (context, index) {
+                            final mov = list[index];
+                            final isIN = mov.type == 'IN';
+
+                            return ListTile(
+                              contentPadding: const EdgeInsets.symmetric(vertical: 4),
+                              leading: CircleAvatar(
+                                backgroundColor: (isIN ? AppColors.success : AppColors.danger).withValues(alpha: 0.15),
+                                child: Icon(
+                                  isIN ? Icons.arrow_downward : Icons.arrow_upward,
+                                  color: isIN ? AppColors.success : AppColors.danger,
+                                  size: 18,
+                                ),
+                              ),
+                              title: Text(
+                                mov.productName,
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.textPrimary),
+                              ),
+                              subtitle: Text(
+                                '${mov.reason} • ${_dateTimeFormat.format(mov.createdAt)}',
+                                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                              ),
+                              trailing: Text(
+                                isIN ? '+${mov.quantity}' : '-${mov.quantity}',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15,
+                                  color: isIN ? AppColors.success : AppColors.danger,
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // Tab 2: Katalog Menu & Stok
+  Widget _buildCatalogTab(List<ProductItem> allProducts) {
+    final items = allProducts.where((p) {
+      final matchQuery = p.name.toLowerCase().contains(_catalogSearchQuery);
+      final matchCategory = (_catalogSelectedCategory == 'Semua') || (p.category == _catalogSelectedCategory);
+      return matchQuery && matchCategory;
+    }).toList();
+
+    return Scaffold(
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
           Navigator.push(
@@ -102,20 +233,20 @@ class _CrudPageState extends State<CrudPage> {
         },
         backgroundColor: AppColors.accent,
         icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text('Tambah Produk', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        label: const Text('Tambah Menu Master', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
       body: Column(
         children: [
-          // Bar Pencarian & Filter
+          // Bar Pencarian & Kategori Katalog
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             color: AppColors.card,
             child: Column(
               children: [
                 TextField(
                   style: const TextStyle(color: AppColors.textPrimary),
                   decoration: InputDecoration(
-                    hintText: 'Cari produk berdasarkan nama...',
+                    hintText: 'Cari master menu...',
                     hintStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
                     prefixIcon: const Icon(Icons.search, color: AppColors.accent),
                     contentPadding: const EdgeInsets.symmetric(vertical: 0),
@@ -127,15 +258,15 @@ class _CrudPageState extends State<CrudPage> {
                     fillColor: AppColors.background,
                   ),
                   onChanged: (val) {
-                    setState(() => _searchQuery = val.toLowerCase().trim());
+                    setState(() => _catalogSearchQuery = val.toLowerCase().trim());
                   },
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
-                    children: _filterCategories.map((cat) {
-                      final isSelected = _selectedFilterCategory == cat;
+                    children: _catalogCategories.map((cat) {
+                      final isSelected = _catalogSelectedCategory == cat;
                       return Padding(
                         padding: const EdgeInsets.only(right: 8),
                         child: FilterChip(
@@ -148,9 +279,13 @@ class _CrudPageState extends State<CrudPage> {
                             fontSize: 12,
                           ),
                           backgroundColor: AppColors.background,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                            side: BorderSide(color: isSelected ? AppColors.accent : AppColors.border),
+                          ),
                           onSelected: (selected) {
                             if (selected) {
-                              setState(() => _selectedFilterCategory = cat);
+                              setState(() => _catalogSelectedCategory = cat);
                             }
                           },
                         ),
@@ -162,214 +297,240 @@ class _CrudPageState extends State<CrudPage> {
             ),
           ),
 
-          // Daftar Produk Realtime dari Cloud Firestore
+          // Daftar Master Menu
           Expanded(
-            child: StreamBuilder<List<ProductItem>>(
-              stream: _firestoreService.getProductsStream(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator(color: AppColors.accent));
-                }
+            child: items.isEmpty
+                ? const Center(
+                    child: Text('Belum ada menu di katalog', style: TextStyle(color: AppColors.textSecondary)),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
+                    itemCount: items.length,
+                    itemBuilder: (context, index) {
+                      final p = items[index];
+                      final isLowStock = p.stock <= 5;
 
-                if (snapshot.hasError) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.cloud_off, color: AppColors.danger, size: 48),
-                          const SizedBox(height: 12),
-                          const Text('Gagal memuat database Firestore',
-                              style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 6),
-                          Text('${snapshot.error}',
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                        ],
-                      ),
-                    ),
-                  );
-                }
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: AppColors.card,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        p.name,
+                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textPrimary),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: AppColors.accent.withValues(alpha: 0.15),
+                                              borderRadius: BorderRadius.circular(6),
+                                            ),
+                                            child: Text(
+                                              p.category,
+                                              style: const TextStyle(color: AppColors.accent, fontSize: 11, fontWeight: FontWeight.w600),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: (isLowStock ? AppColors.danger : AppColors.success).withValues(alpha: 0.15),
+                                              borderRadius: BorderRadius.circular(6),
+                                            ),
+                                            child: Text(
+                                              isLowStock ? 'Stok Kritis: ${p.stock}' : 'Stok: ${p.stock}',
+                                              style: TextStyle(
+                                                color: isLowStock ? AppColors.danger : AppColors.success,
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(Icons.edit_outlined, color: AppColors.textSecondary, size: 20),
+                                      tooltip: 'Edit Master Menu',
+                                      onPressed: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(builder: (context) => CrudFormPage(product: p)),
+                                        );
+                                      },
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline, color: AppColors.danger, size: 20),
+                                      tooltip: 'Hapus Menu',
+                                      onPressed: () => _confirmDeleteProduct(p),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            const Divider(color: AppColors.border, height: 1),
+                            const SizedBox(height: 10),
 
-                final allItems = snapshot.data ?? [];
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text('Harga Jual', style: TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+                                    Text(_currency.format(p.sellingPrice), style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                                  ],
+                                ),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text('Modal Beli', style: TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+                                    Text(_currency.format(p.purchasePrice), style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                                  ],
+                                ),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    const Text('Margin Laba', style: TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+                                    Text(
+                                      '+${_currency.format(p.profitPerUnit)} (${p.marginPercentage.toStringAsFixed(1)}%)',
+                                      style: TextStyle(
+                                        color: p.profitPerUnit >= 0 ? AppColors.success : AppColors.danger,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
 
-                // Terapkan Filter & Pencarian
-                final items = allItems.where((item) {
-                  final matchQuery = item.name.toLowerCase().contains(_searchQuery);
-                  final matchCategory = (_selectedFilterCategory == 'Semua') ||
-                      (item.category == _selectedFilterCategory);
-                  return matchQuery && matchCategory;
-                }).toList();
-
-                if (items.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.inventory_2_outlined, size: 64, color: AppColors.textSecondary.withValues(alpha: 0.5)),
-                        const SizedBox(height: 12),
-                        const Text('Belum ada produk ditemukan',
-                            style: TextStyle(color: AppColors.textSecondary, fontSize: 16)),
-                        const SizedBox(height: 4),
-                        const Text('Klik tombol Tambah Produk di bawah',
-                            style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                      ],
-                    ),
-                  );
-                }
-
-                return ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
-                  itemCount: items.length,
-                  itemBuilder: (context, index) {
-                    final item = items[index];
-                    return _buildProductCard(item);
-                  },
-                );
-              },
-            ),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: () => AdjustStockDialog.show(context, p),
+                                style: OutlinedButton.styleFrom(
+                                  side: const BorderSide(color: AppColors.accent),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  padding: const EdgeInsets.symmetric(vertical: 8),
+                                ),
+                                icon: const Icon(Icons.tune, size: 16, color: AppColors.accent),
+                                label: const Text(
+                                  'Atur Stok (Restock / Mutasi Keluar)',
+                                  style: TextStyle(color: AppColors.accent, fontSize: 12, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildProductCard(ProductItem item) {
-    final isLowStock = item.stock <= 5;
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 4,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Operasional Bisnis UMKM'),
+          centerTitle: false,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.swap_vert),
+              tooltip: 'Riwayat Mutasi Stok',
+              onPressed: _showMovementHistoryModal,
+            ),
+          ],
+          bottom: const TabBar(
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
+            indicatorColor: AppColors.accent,
+            labelColor: AppColors.accent,
+            unselectedLabelColor: AppColors.textSecondary,
+            labelStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+            tabs: [
+              Tab(icon: Icon(Icons.point_of_sale), text: 'Kasir Penjualan'),
+              Tab(icon: Icon(Icons.inventory_2_outlined), text: 'Katalog & Stok'),
+              Tab(icon: Icon(Icons.receipt_long_outlined), text: 'Riwayat Transaksi'),
+              Tab(icon: Icon(Icons.analytics_outlined), text: 'Ringkasan Bisnis'),
+            ],
+          ),
+        ),
+        body: StreamBuilder<List<ProductItem>>(
+          stream: _firestoreService.getProductsStream(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator(color: AppColors.accent));
+            }
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header card: Nama & Kategori
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item.name,
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: AppColors.accent.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            item.category,
-                            style: const TextStyle(color: AppColors.accent, fontSize: 11, fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: (isLowStock ? AppColors.danger : AppColors.success).withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            isLowStock ? 'Stok Kritis: ${item.stock}' : 'Stok: ${item.stock}',
-                            style: TextStyle(
-                              color: isLowStock ? AppColors.danger : AppColors.success,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+            if (snapshot.hasError) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.cloud_off, color: AppColors.danger, size: 48),
+                      const SizedBox(height: 12),
+                      const Text('Gagal memuat database Firestore',
+                          style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 6),
+                      Text('${snapshot.error}', textAlign: TextAlign.center, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                    ],
+                  ),
                 ),
-              ),
-              // Menu aksi edit & hapus
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.edit_outlined, color: AppColors.textSecondary, size: 20),
-                    tooltip: 'Edit Produk',
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => CrudFormPage(product: item),
-                        ),
-                      );
-                    },
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline, color: AppColors.danger, size: 20),
-                    tooltip: 'Hapus Produk',
-                    onPressed: () => _confirmDelete(item),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          const Divider(color: AppColors.border, height: 1),
-          const SizedBox(height: 12),
+              );
+            }
 
-          // Detail Harga & Margin Keuntungan
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Harga Jual', style: TextStyle(color: AppColors.textSecondary, fontSize: 11)),
-                  Text(
-                    _currency.format(item.sellingPrice),
-                    style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
-                  ),
-                ],
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Modal / Beli', style: TextStyle(color: AppColors.textSecondary, fontSize: 11)),
-                  Text(
-                    _currency.format(item.purchasePrice),
-                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
-                  ),
-                ],
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  const Text('Margin / Unit', style: TextStyle(color: AppColors.textSecondary, fontSize: 11)),
-                  Text(
-                    '+${_currency.format(item.profitPerUnit)} (${item.marginPercentage.toStringAsFixed(1)}%)',
-                    style: TextStyle(
-                      color: item.profitPerUnit >= 0 ? AppColors.success : AppColors.danger,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ],
+            final allProducts = snapshot.data ?? [];
+
+            return TabBarView(
+              children: [
+                CashierView(allProducts: allProducts),
+                _buildCatalogTab(allProducts),
+                HistoryView(
+                  selectedPeriod: _sharedPeriod,
+                  customRange: _sharedCustomRange,
+                  onPeriodChanged: _onPeriodChanged,
+                ),
+                SummaryView(
+                  selectedPeriod: _sharedPeriod,
+                  customRange: _sharedCustomRange,
+                  onPeriodChanged: _onPeriodChanged,
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }

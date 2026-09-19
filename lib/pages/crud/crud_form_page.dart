@@ -270,17 +270,29 @@ class _CrudFormPageState extends State<CrudFormPage> {
               // 5. STOK BARANG
               TextFormField(
                 controller: _stockController,
+                readOnly: isEdit,
                 keyboardType: TextInputType.number,
-                style: const TextStyle(color: AppColors.textPrimary),
+                style: TextStyle(
+                  color: isEdit ? AppColors.textSecondary : AppColors.textPrimary,
+                ),
                 decoration: InputDecoration(
-                  labelText: 'Jumlah Stok (Unit) *',
+                  labelText: isEdit ? 'Jumlah Stok Saat Ini (Terkunci)' : 'Jumlah Stok Awal (Unit) *',
                   hintText: 'Contoh: 50',
-                  prefixIcon: const Icon(Icons.numbers_outlined, color: AppColors.accent),
+                  helperText: isEdit
+                      ? 'ℹ️ Perubahan stok dilakukan lewat menu "Atur Stok" agar tercatat di mutasi inventaris.'
+                      : 'Stok awal akan otomatis dicatat pada riwayat mutasi masuk.',
+                  helperMaxLines: 2,
+                  helperStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                  prefixIcon: Icon(
+                    isEdit ? Icons.lock_outline : Icons.numbers_outlined,
+                    color: isEdit ? AppColors.textSecondary : AppColors.accent,
+                  ),
                   filled: true,
-                  fillColor: AppColors.card,
+                  fillColor: isEdit ? AppColors.background : AppColors.card,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 validator: (val) {
+                  if (isEdit) return null;
                   if (val == null || val.trim().isEmpty) {
                     return 'Jumlah stok wajib diisi';
                   }

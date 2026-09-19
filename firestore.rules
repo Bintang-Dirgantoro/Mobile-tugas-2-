@@ -4,17 +4,14 @@ rules_version = '2';
 // Assumed Data Model
 // ===============================================================
 //
-// Collection: products
-// Document ID: auto-generated Firestore ID
-// Fields:
-//   - name: string (1 to 60 chars) - Nama produk / jasa
-//   - category: string (1 to 30 chars) - Kategori produk
-//   - purchase_price: number (>= 0 and <= 999999999999) - Harga modal / beli
-//   - selling_price: number (>= 0 and <= 999999999999) - Harga jual ke konsumen
-//   - stock: number/int (>= 0 and <= 1000000) - Jumlah stok barang
-//   - created_at: timestamp - Tanggal pembuatan
-//   - user_id: string - UID pemilik produk
-//   - updated_at: timestamp (optional) - Tanggal pembaruan terakhir
+// 1. Collection: products
+//    Fields: name, category, purchase_price, selling_price, stock, created_at, user_id, updated_at
+//
+// 2. Collection: transactions
+//    Fields: transaction_code, created_at, total_amount, total_cost, total_items, items, user_id, status, customer_name, payment_method, paid_at
+//
+// 3. Collection: inventory_movements
+//    Fields: product_id, product_name, type, quantity, reason, created_at, user_id
 //
 // ===============================================================
 
@@ -39,21 +36,33 @@ service cloud.firestore {
              data.stock is number && data.stock >= 0 && data.stock <= 1000000;
     }
 
+    // Koleksi 1: Master Produk
     match /products/{productId} {
-      // 1. Read: Izinkan jika user sudah login
       allow read: if isAuthenticated();
-
-      // 2. Create: Wajib login & data sesuai validasi skema
       allow create: if isAuthenticated() &&
                        isValidProduct(request.resource.data) &&
                        hasRequiredFields(['name', 'category', 'purchase_price', 'selling_price', 'stock', 'user_id']);
-
-      // 3. Update: Wajib login & data tetap sesuai validasi skema
       allow update: if isAuthenticated() &&
                        isValidProduct(request.resource.data);
-
-      // 4. Delete: Wajib login
       allow delete: if isAuthenticated();
+    }
+
+    // Koleksi 2: Transaksi Penjualan (Kasir)
+    match /transactions/{transactionId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() &&
+                       hasRequiredFields(['transaction_code', 'total_amount', 'total_items', 'items', 'user_id']);
+      // Mengizinkan pembaruan status pelunasan (LUNAS, metode pembayaran QRIS/Tunai)
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated();
+    }
+
+    // Koleksi 3: Mutasi Inventaris
+    match /inventory_movements/{movementId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() &&
+                       hasRequiredFields(['product_id', 'product_name', 'type', 'quantity', 'reason', 'user_id']);
+      allow update, delete: if false; // Log mutasi stok bersifat audit trail immutable
     }
   }
 }

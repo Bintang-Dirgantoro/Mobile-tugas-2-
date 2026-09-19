@@ -176,13 +176,13 @@ class _HomePageState extends State<HomePage> {
                 ),
                 const SizedBox(height: 12),
 
-                // MENU 3: CRUD SESUAI TEMA (CLOUDFIRESTORE)
+                // MENU 3: OPERASIONAL BISNIS & KASIR UMKM (WARMINDO SYSTEM)
                 _buildVerticalMenuCard(
                   context: context,
-                  icon: Icons.storage_outlined,
+                  icon: Icons.store_mall_directory_outlined,
                   accentColor: const Color(0xFF38BDF8), // Sky blue
-                  title: '3. Kelola Produk UMKM (CRUD)',
-                  subtitle: 'Database inventaris produk Cloud Firestore',
+                  title: '3. Operasional Bisnis & Kasir UMKM',
+                  subtitle: 'Kasir POS, master menu, mutasi stok & riwayat penjualan',
                   onTap: () {
                     Navigator.push(
                       context,
