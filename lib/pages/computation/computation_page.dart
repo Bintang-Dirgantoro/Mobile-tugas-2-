@@ -55,7 +55,7 @@ class _ComputationPageState extends State<ComputationPage>
 
   // Controllers Tab 3: Pajak UMKM
   final TextEditingController _revenueController = TextEditingController();
-  double _taxRate = 0.5; // Default 0.5% (PPh Final UMKM)
+  String _businessType = 'Orang Pribadi (Perorangan)';
   String? _taxError;
   Map<String, String>? _taxResult;
 
@@ -137,7 +137,16 @@ class _ComputationPageState extends State<ComputationPage>
     });
 
     final originalPrice = _parseSafeDouble(_originalPriceController.text);
-    final disc1 = _parseSafeDouble(_discount1Controller.text) ?? 0.0;
+    
+    final disc1Str = _discount1Controller.text.trim();
+    final disc2Str = _discount2Controller.text.trim();
+    
+    if (disc1Str.isEmpty && disc2Str.isNotEmpty) {
+      setState(() => _discountError = 'Diskon 1 wajib diisi terlebih dahulu sebelum mengisi Diskon 2!');
+      return;
+    }
+    
+    final disc1 = _parseSafeDouble(_discount1Controller.text);
     final disc2 = _parseSafeDouble(_discount2Controller.text) ?? 0.0;
 
     if (originalPrice == null) {
@@ -148,10 +157,12 @@ class _ComputationPageState extends State<ComputationPage>
       setState(() => _discountError = 'Harga awal harus lebih besar dari 0!');
       return;
     }
-    // if (originalPrice > _maxAllowedAmount) {
-    //   setState(() => _discountError = 'Harga melebihi batas wajar!');
-    //   return;
-    // }
+    
+    if (disc1 == null) {
+      setState(() => _discountError = 'Diskon 1 wajib diisi!');
+      return;
+    }
+
     if (disc1 < 0 || disc1 > 100 || disc2 < 0 || disc2 > 100) {
       setState(() => _discountError = 'Persentase diskon harus di antara 0% s/d 100%!');
       return;
@@ -191,19 +202,52 @@ class _ComputationPageState extends State<ComputationPage>
       setState(() => _taxError = 'Omzet tidak boleh bernilai negatif!');
       return;
     }
-    // if (revenue > _maxAllowedAmount) {
-    //   setState(() => _taxError = 'Nominal melebihi batas sistem!');
-    //   return;
-    // } 
 
-    final taxAmount = revenue * (_taxRate / 100);
+    double taxAmount = 0.0;
+    String pphInfo = '';
+    String ppnStatus = revenue >= 4800000000 
+      ? 'Wajib PKP (Tarif 12%)' 
+      : 'Non-PKP (Bebas PPN)';
+
+    if (_businessType == 'Orang Pribadi (Perorangan)') {
+      if (revenue <= 500000000) {
+        taxAmount = 0.0;
+        pphInfo = 'Bebas Pajak (PTKP UMKM)';
+      } else if (revenue <= 4800000000) {
+        final dpp = revenue - 500000000;
+        taxAmount = dpp * 0.005;
+        pphInfo = '0.5% dari (Omzet - 500 Juta)';
+      } else {
+        setState(() {
+          _taxError = 'Omzet melebihi Rp 4.8 Miliar. Wajib PPh Tarif Normal & Wajib PKP (PPN 12%).';
+        });
+        return;
+      }
+    } else if (_businessType == 'PT Perorangan / Koperasi') {
+      if (revenue <= 4800000000) {
+        taxAmount = revenue * 0.005;
+        pphInfo = '0.5% dari Omzet';
+      } else {
+        setState(() {
+          _taxError = 'Omzet melebihi Rp 4.8 Miliar. Wajib PPh Tarif Normal & Wajib PKP (PPN 12%).';
+        });
+        return;
+      }
+    } else if (_businessType == 'CV / PT Biasa') {
+      setState(() {
+        _taxError = 'Berdasarkan PP 20/2026, CV/PT baru tidak berhak atas PPh Final 0,5%. Wajib menggunakan skema PPh Badan Normal (22% dari Laba Bersih) menggunakan pembukuan.';
+      });
+      return;
+    }
+
     final netRevenue = revenue - taxAmount;
 
     setState(() {
       _taxResult = {
+        'pphInfo': pphInfo,
         'tax': _currencyFormat.format(taxAmount),
         'netRevenue': _currencyFormat.format(netRevenue),
-        'rate': '$_taxRate%',
+        'ppnStatus': ppnStatus,
       };
     });
   }
@@ -364,32 +408,42 @@ class _ComputationPageState extends State<ComputationPage>
             icon: Icons.account_balance_wallet_outlined,
           ),
           const SizedBox(height: 14),
-          const Text('Pilih Tarif Pajak:', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
+          const Text('Bentuk Usaha:', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: ChoiceChip(
-                  label: const Text('PPh Final 0.5%'),
-                  selected: _taxRate == 0.5,
-                  selectedColor: AppColors.accent,
-                  onSelected: (selected) {
-                    if (selected) setState(() => _taxRate = 0.5);
-                  },
-                ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: _businessType,
+                isExpanded: true,
+                dropdownColor: AppColors.card,
+                style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
+                items: [
+                  'Orang Pribadi (Perorangan)',
+                  'PT Perorangan / Koperasi',
+                  'CV / PT Biasa'
+                ].map((String value) {
+                  return DropdownMenuItem<String>(
+                    value: value,
+                    child: Text(value, style: const TextStyle(color: AppColors.textPrimary)),
+                  );
+                }).toList(),
+                onChanged: (String? newValue) {
+                  if (newValue != null) {
+                    setState(() {
+                      _businessType = newValue;
+                      _taxResult = null;
+                      _taxError = null;
+                    });
+                  }
+                },
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: ChoiceChip(
-                  label: const Text('PPN 11%'),
-                  selected: _taxRate == 11.0,
-                  selectedColor: AppColors.accent,
-                  onSelected: (selected) {
-                    if (selected) setState(() => _taxRate = 11.0);
-                  },
-                ),
-              ),
-            ],
+            ),
           ),
           const SizedBox(height: 16),
           if (_taxError != null) _errorCard(_taxError!),
@@ -406,9 +460,11 @@ class _ComputationPageState extends State<ComputationPage>
           if (_taxResult != null) ...[
             const SizedBox(height: 20),
             _resultCard([
-              _resultRow('Tarif Pajak Dipilih:', _taxResult!['rate']!),
+              _resultRow('Keterangan PPh Final:', _taxResult!['pphInfo']!),
               _resultRow('Pajak yang Harus Disetor:', _taxResult!['tax']!,
                   color: AppColors.warning, isLarge: true),
+              _resultRow('Status PPN:', _taxResult!['ppnStatus']!,
+                  color: _taxResult!['ppnStatus']!.contains('Wajib') ? AppColors.danger : AppColors.success),
               _resultRow('Pendapatan Bersih (Net):', _taxResult!['netRevenue']!),
             ]),
           ],
@@ -487,8 +543,12 @@ class _ComputationPageState extends State<ComputationPage>
         border: Border.all(color: AppColors.danger),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.error_outline, color: AppColors.danger, size: 20),
+          const Padding(
+            padding: EdgeInsets.only(top: 2.0),
+            child: Icon(Icons.error_outline, color: AppColors.danger, size: 20),
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(message, style: const TextStyle(color: Colors.white, fontSize: 13)),
@@ -518,14 +578,23 @@ class _ComputationPageState extends State<ComputationPage>
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-          Text(
-            value,
-            style: TextStyle(
-              color: color ?? AppColors.textPrimary,
-              fontWeight: FontWeight.bold,
-              fontSize: isLarge ? 16 : 14,
+          Expanded(
+            flex: 2,
+            child: Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            flex: 3,
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                color: color ?? AppColors.textPrimary,
+                fontWeight: FontWeight.bold,
+                fontSize: isLarge ? 16 : 14,
+              ),
             ),
           ),
         ],
