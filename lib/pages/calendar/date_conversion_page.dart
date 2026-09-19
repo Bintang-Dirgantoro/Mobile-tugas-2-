@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:hijri/hijri_calendar.dart';
 import '../../theme/app_colors.dart';
 
 /// Halaman Konversi Tanggal Hijriah & Kalkulator Umur Presisi
@@ -87,42 +88,12 @@ class _DateConversionPageState extends State<DateConversionPage>
   // 1. ALGORITMA KONVERSI HIJRIAH
   // ==========================================
   void _calculateHijri(DateTime gregorianDate) {
-    int day = gregorianDate.day;
-    int month = gregorianDate.month;
-    int year = gregorianDate.year;
-
-    // Perhitungan Julian Day Number (JDN)
-    int m = month;
-    int y = year;
-    if (m <= 2) {
-      y -= 1;
-      m += 12;
-    }
-    int a = (y / 100).floor();
-    int b = 2 - a + (a / 4).floor();
-    int jdn = (365.25 * (y + 4716)).floor() +
-        (30.6001 * (m + 1)).floor() +
-        day +
-        b -
-        1524;
-
-    // Konversi JDN ke Kalender Hijriah (Algoritma Tabular Astronomis)
-    int l = jdn - 1948440 + 10632;
-    int n = ((l - 1) / 10631).floor();
-    l = l - 10631 * n + 354;
-    int j = (((10985 - l) / 5316).floor()) * (((50 * l + 17719) / 9842).floor()) +
-        ((l / 5670).floor()) * (((43 * l + 15238) / 43).floor());
-    l = l -
-        (((30 - j) / 15).floor()) * (((17719 * j + 2889) / 50).floor()) -
-        ((j / 16).floor()) * (((43 * j + 24234) / 43).floor()) +
-        29;
-    int hMonth = ((24 * l) / 709).floor();
-    int hDay = l - ((709 * hMonth) / 24).floor();
-    int hYear = 30 * n + j - 30;
-
-    // Koreksi batas bulan
-    if (hMonth < 1) hMonth = 1;
-    if (hMonth > 12) hMonth = 12;
+    // Menggunakan package hijri untuk konversi yang akurat
+    final hijriDate = HijriCalendar.fromDate(gregorianDate);
+    
+    int hDay = hijriDate.hDay;
+    int hMonth = hijriDate.hMonth;
+    int hYear = hijriDate.hYear;
 
     setState(() {
       _hijriResult = {
