@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_text_styles.dart';
 import '../group/group_page.dart';
 import '../computation/computation_page.dart';
 import '../crud/crud_page.dart';
@@ -48,8 +49,8 @@ class _HomePageState extends State<HomePage> {
         ),
         child: BottomNavigationBar(
           currentIndex: _currentTabIndex,
-          backgroundColor: AppColors.card,
-          selectedItemColor: AppColors.accent,
+          backgroundColor: AppColors.white,
+          selectedItemColor: AppColors.darkTeal,
           unselectedItemColor: AppColors.textSecondary,
           selectedFontSize: 12,
           unselectedFontSize: 12,
@@ -83,9 +84,14 @@ class _HomePageState extends State<HomePage> {
   Widget _buildMainDashboard(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Smart UMKM & Utilitas'),
+        title: Text(
+          'Smart UMKM & Utilitas',
+          style: AppTextStyles.heading.copyWith(fontSize: 18, color: AppColors.darkTeal),
+        ),
         centerTitle: true,
         elevation: 0,
+        backgroundColor: AppColors.background,
+        iconTheme: const IconThemeData(color: AppColors.darkTeal),
       ),
       body: SafeArea(
         child: Center(
@@ -101,37 +107,33 @@ class _HomePageState extends State<HomePage> {
                   padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                   margin: const EdgeInsets.only(bottom: 20),
                   decoration: BoxDecoration(
-                    color: AppColors.card,
+                    color: AppColors.white,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.border),
+                    border: Border.all(color: AppColors.borderLight),
                   ),
                   child: Row(
                     children: [
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: AppColors.accent.withValues(alpha: 0.15),
+                          color: AppColors.warmOrange.withValues(alpha: 0.15),
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.storefront, color: AppColors.accent, size: 24),
+                        child: const Icon(Icons.storefront, color: AppColors.warmOrange, size: 24),
                       ),
                       const SizedBox(width: 14),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
-                          children: const [
+                          children: [
                             Text(
                               'Menu Utama Aplikasi',
-                              style: TextStyle(
-                                color: AppColors.textPrimary,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
+                              style: AppTextStyles.cardHeading.copyWith(fontSize: 15),
                             ),
-                            SizedBox(height: 2),
+                            const SizedBox(height: 2),
                             Text(
                               'Pilih layanan komputasi & utilitas di bawah',
-                              style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                              style: AppTextStyles.bodySecondary.copyWith(fontSize: 12),
                             ),
                           ],
                         ),
@@ -147,8 +149,8 @@ class _HomePageState extends State<HomePage> {
                 // MENU 1: DAFTAR ANGGOTA
                 _buildVerticalMenuCard(
                   context: context,
-                  icon: Icons.groups_outlined,
-                  accentColor: AppColors.accent,
+                  icon: Icons.people_outlined,
+                  accentColor: AppColors.iconBlue,
                   title: '1. Daftar Anggota',
                   subtitle: 'Data profil 3 anggota kelompok & peran',
                   onTap: () {
@@ -163,8 +165,8 @@ class _HomePageState extends State<HomePage> {
                 // MENU 2: KOMPUTASI SESUAI TEMA
                 _buildVerticalMenuCard(
                   context: context,
-                  icon: Icons.calculate_outlined,
-                  accentColor: AppColors.success,
+                  icon: Icons.pie_chart,
+                  accentColor: AppColors.iconGreen,
                   title: '2. Komputasi Finansial UMKM',
                   subtitle: 'Kalkulator laba, margin, diskon & pajak',
                   onTap: () {
@@ -179,8 +181,8 @@ class _HomePageState extends State<HomePage> {
                 // MENU 3: OPERASIONAL BISNIS & KASIR UMKM (WARMINDO SYSTEM)
                 _buildVerticalMenuCard(
                   context: context,
-                  icon: Icons.store_mall_directory_outlined,
-                  accentColor: const Color(0xFF38BDF8), // Sky blue
+                  icon: Icons.point_of_sale_outlined,
+                  accentColor: AppColors.iconRed,
                   title: '3. Operasional Bisnis & Kasir UMKM',
                   subtitle: 'Kasir POS, master menu, mutasi stok & riwayat penjualan',
                   onTap: () {
@@ -195,8 +197,8 @@ class _HomePageState extends State<HomePage> {
                 // MENU 4: KONVERSI HIJRIAH & KALKULATOR UMUR PRESISI
                 _buildVerticalMenuCard(
                   context: context,
-                  icon: Icons.calendar_month_outlined,
-                  accentColor: AppColors.warning,
+                  icon: Icons.calendar_today_outlined,
+                  accentColor: AppColors.iconPurple,
                   title: '4. Kalender Hijriah & Umur Presisi',
                   subtitle: 'Konversi Hijriah & umur detail hingga detik',
                   onTap: () {
@@ -212,7 +214,7 @@ class _HomePageState extends State<HomePage> {
                 _buildVerticalMenuCard(
                   context: context,
                   icon: Icons.temple_hindu_outlined,
-                  accentColor: const Color(0xFFF43F5E), // Rose red
+                  accentColor: AppColors.iconYellow,
                   title: '5. Kalender Weton & Saka Bali',
                   subtitle: 'Pasaran Jawa, neptu, wuku & kalender Bali',
                   onTap: () {
@@ -241,30 +243,30 @@ class _HomePageState extends State<HomePage> {
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(20),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.border),
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: AppColors.borderLight),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.2),
-              blurRadius: 6,
-              offset: const Offset(0, 3),
+              color: AppColors.darkTeal.withValues(alpha: 0.06),
+              blurRadius: 12,
+              offset: const Offset(0, 5),
             ),
           ],
         ),
         child: Row(
           children: [
             Container(
-              width: 46,
-              height: 46,
+              width: 44,
+              height: 44,
+              padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: accentColor.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: accentColor.withValues(alpha: 0.4)),
+                shape: BoxShape.circle,
               ),
               child: Icon(icon, color: accentColor, size: 24),
             ),
@@ -275,19 +277,12 @@ class _HomePageState extends State<HomePage> {
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(
-                      color: AppColors.textPrimary,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                    ),
+                    style: AppTextStyles.cardHeading.copyWith(fontSize: 14.5),
                   ),
                   const SizedBox(height: 3),
                   Text(
                     subtitle,
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 12,
-                    ),
+                    style: AppTextStyles.bodySecondary.copyWith(fontSize: 12),
                   ),
                 ],
               ),

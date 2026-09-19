@@ -1,5 +1,5 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
+import 'dart:async';
 import '../../theme/app_colors.dart';
 
 /// Halaman Aplikasi Stopwatch (Bottom Nav Tab 2)
@@ -23,6 +23,9 @@ class _StopwatchPageState extends State<StopwatchPage> {
   // Daftar Lap Time: menyimpan durasi waktu per putaran
   final List<Duration> _laps = [];
 
+  // Waktu awal yang dapat diatur pengguna
+  Duration _initialTime = Duration.zero;
+
   void _startTimer() {
     _stopwatch.start();
     _timer = Timer.periodic(const Duration(milliseconds: 30), (_) {
@@ -40,6 +43,7 @@ class _StopwatchPageState extends State<StopwatchPage> {
     _stopwatch.reset();
     _timer?.cancel();
     _laps.clear();
+    _initialTime = Duration.zero;
     setState(() {});
   }
 
@@ -51,6 +55,143 @@ class _StopwatchPageState extends State<StopwatchPage> {
     }
   }
 
+  Future<void> _showTimePickerDialog() async {
+    final TextEditingController hourController = TextEditingController(text: '00');
+    final TextEditingController minuteController = TextEditingController(text: '00');
+    final TextEditingController secondController = TextEditingController(text: '00');
+
+    return showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              Icon(Icons.edit_outlined, color: AppColors.accent, size: 22),
+              const SizedBox(width: 8),
+              Text(
+                'Atur Waktu Awal',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.darkTeal,
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: hourController,
+                      textAlign: TextAlign.center,
+                      keyboardType: TextInputType.number,
+                      maxLength: 2,
+                      decoration: const InputDecoration(
+                        hintText: 'jj',
+                        counterText: '',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                        contentPadding: EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+                      ),
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 4),
+                    child: Text(':', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  ),
+                  Expanded(
+                    child: TextField(
+                      controller: minuteController,
+                      textAlign: TextAlign.center,
+                      keyboardType: TextInputType.number,
+                      maxLength: 2,
+                      decoration: const InputDecoration(
+                        hintText: 'mm',
+                        counterText: '',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                        contentPadding: EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+                      ),
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 4),
+                    child: Text(':', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  ),
+                  Expanded(
+                    child: TextField(
+                      controller: secondController,
+                      textAlign: TextAlign.center,
+                      keyboardType: TextInputType.number,
+                      maxLength: 2,
+                      decoration: const InputDecoration(
+                        hintText: 'dd',
+                        counterText: '',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                        contentPadding: EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+                      ),
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(
+                'Batal',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final int? hour = int.tryParse(hourController.text);
+                final int? minute = int.tryParse(minuteController.text);
+                final int? second = int.tryParse(secondController.text);
+                if (hour == null || minute == null || second == null) return;
+                if (hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59) return;
+                setState(() {
+                  _initialTime = Duration(hours: hour, minutes: minute, seconds: second);
+                  _stopwatch.reset();
+                  _laps.clear();
+                });
+                Navigator.of(context).pop();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.accent,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              ),
+              child: Text(
+                'Set',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   void dispose() {
     _timer?.cancel();
@@ -60,12 +201,18 @@ class _StopwatchPageState extends State<StopwatchPage> {
 
   String _formatTime(Duration duration) {
     String twoDigits(int n) => n.toString().padLeft(2, '0');
-    final minutes = twoDigits(duration.inMinutes.remainder(60));
-    final seconds = twoDigits(duration.inSeconds.remainder(60));
-    final milliseconds = (duration.inMilliseconds.remainder(1000) ~/ 10)
+    final total = _initialTime + duration;
+    final days = total.inDays;
+    final hours = twoDigits(total.inHours.remainder(24));
+    final minutes = twoDigits(total.inMinutes.remainder(60));
+    final seconds = twoDigits(total.inSeconds.remainder(60));
+    final milliseconds = (total.inMilliseconds.remainder(1000) ~/ 10)
         .toString()
         .padLeft(2, '0');
-    return '$minutes:$seconds.$milliseconds';
+    if (days > 0) {
+      return '$days:$hours:$minutes:$seconds.$milliseconds';
+    }
+    return '$hours:$minutes:$seconds.$milliseconds';
   }
 
   @override
@@ -85,8 +232,8 @@ class _StopwatchPageState extends State<StopwatchPage> {
           // Tampilan Lingkaran Stopwatch Digital
           Center(
             child: Container(
-              width: 250,
-              height: 250,
+              width: 350,
+              height: 350,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: AppColors.card,
@@ -174,6 +321,15 @@ class _StopwatchPageState extends State<StopwatchPage> {
               ),
             ],
           ),
+          const SizedBox(height: 16),
+
+          // Tombol untuk memunculkan dialog atur waktu awal
+          TextButton.icon(
+            onPressed: _showTimePickerDialog,
+            icon: const Icon(Icons.edit_outlined, size: 18),
+            label: const Text('Atur Waktu Awal'),
+          ),
+
           const SizedBox(height: 24),
           const Divider(color: AppColors.border),
 
