@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../data/menu_presets.dart';
 
 // ==========================================
 // 1. MODEL PRODUK (MASTER MENU)
@@ -116,6 +117,23 @@ class TransactionItem {
   }
 }
 
+/// Hasil kembalian pembuatan transaksi baru
+class CreateTransactionResult {
+  final String id;
+  final String code;
+  final double totalAmount;
+  final double totalCost;
+  final int totalItems;
+
+  CreateTransactionResult({
+    required this.id,
+    required this.code,
+    required this.totalAmount,
+    required this.totalCost,
+    required this.totalItems,
+  });
+}
+
 /// Dokumen Transaksi Penjualan Lengkap
 class TransactionModel {
   final String id;
@@ -126,6 +144,13 @@ class TransactionModel {
   final int totalItems;
   final List<TransactionItem> items;
   final String userId;
+  final String status; // 'MENUNGGU_PEMBAYARAN' atau 'LUNAS'
+  final String customerName; // '[Dine In] Meja 1' atau '[Take Away] Antrean #01'
+  final String orderType; // 'DINE_IN' atau 'TAKE_AWAY'
+  final String tableNumber; // 'Meja 1' (jika Dine In)
+  final String queueNumber; // '01' (jika Take Away)
+  final String? paymentMethod; // 'Tunai' atau 'QRIS'
+  final DateTime? paidAt;
 
   TransactionModel({
     required this.id,
@@ -136,7 +161,30 @@ class TransactionModel {
     required this.totalItems,
     required this.items,
     required this.userId,
+    this.status = 'MENUNGGU_PEMBAYARAN',
+    this.customerName = 'Pelanggan (Anonymous)',
+    this.orderType = 'DINE_IN',
+    this.tableNumber = '',
+    this.queueNumber = '',
+    this.paymentMethod,
+    this.paidAt,
   });
+
+  bool get isPaid => status == 'LUNAS';
+  bool get isPending => status == 'MENUNGGU_PEMBAYARAN';
+  bool get isDineIn => orderType == 'DINE_IN';
+  bool get isTakeAway => orderType == 'TAKE_AWAY';
+
+  String get orderTypeLabel => isTakeAway ? 'Take Away (Bungkus)' : 'Dine In (Makan di Sini)';
+
+  String get displayIdentifier {
+    if (isTakeAway && queueNumber.isNotEmpty) {
+      return 'Antrean #$queueNumber';
+    } else if (isDineIn && tableNumber.isNotEmpty) {
+      return tableNumber;
+    }
+    return customerName;
+  }
 
   double get profit => totalAmount - totalCost;
 
@@ -164,6 +212,15 @@ class TransactionModel {
           : 0,
       items: items,
       userId: data['user_id'] ?? '',
+      status: data['status'] ?? 'MENUNGGU_PEMBAYARAN',
+      customerName: data['customer_name'] ?? 'Pelanggan (Anonymous)',
+      orderType: data['order_type'] ?? 'DINE_IN',
+      tableNumber: data['table_number'] ?? '',
+      queueNumber: data['queue_number'] ?? '',
+      paymentMethod: data['payment_method'],
+      paidAt: (data['paid_at'] is Timestamp)
+          ? (data['paid_at'] as Timestamp).toDate()
+          : null,
     );
   }
 
@@ -176,6 +233,13 @@ class TransactionModel {
       'total_items': totalItems,
       'items': items.map((e) => e.toMap()).toList(),
       'user_id': userId,
+      'status': status,
+      'customer_name': customerName,
+      'order_type': orderType,
+      'table_number': tableNumber,
+      'queue_number': queueNumber,
+      'payment_method': paymentMethod,
+      'paid_at': paidAt != null ? Timestamp.fromDate(paidAt!) : null,
     };
   }
 }
@@ -301,6 +365,45 @@ class FirestoreService {
     }
   }
 
+  /// Muat seluruh paket menu preset ke Firestore secara batch (cepat, instan & atomik)
+  Future<int> importPresetMenu(List<PresetMenuItem> presetItems) async {
+    try {
+      final batch = _db.batch();
+      final now = FieldValue.serverTimestamp();
+
+      for (final it in presetItems) {
+        final productDocRef = _db.collection(_collectionProducts).doc();
+        batch.set(productDocRef, {
+          'name': it.name.trim(),
+          'category': it.category.trim(),
+          'purchase_price': it.purchasePrice,
+          'selling_price': it.sellingPrice,
+          'stock': it.stock,
+          'created_at': now,
+          'user_id': _currentUserId,
+        });
+
+        if (it.stock > 0) {
+          final movDocRef = _db.collection(_collectionMovements).doc();
+          batch.set(movDocRef, {
+            'product_id': productDocRef.id,
+            'product_name': it.name.trim(),
+            'type': 'IN',
+            'quantity': it.stock,
+            'reason': 'Template Menu Awal',
+            'created_at': now,
+            'user_id': _currentUserId,
+          });
+        }
+      }
+
+      await batch.commit();
+      return presetItems.length;
+    } catch (e) {
+      throw Exception('Gagal memuat template menu: $e');
+    }
+  }
+
   /// Perbarui data master produk
   Future<void> updateProduct({
     required String id,
@@ -337,18 +440,25 @@ class FirestoreService {
   // B. OPERASI TRANSAKSI PENJUALAN (SALES)
   // ----------------------------------------------------
 
-  /// Eksekusi transaksi penjualan secara atomik:
-  /// 1. Cek ketersediaan stok setiap produk.
-  /// 2. Kurangi stok produk.
-  /// 3. Simpan dokumen transaksi.
-  /// 4. Catat mutasi stok keluar (type: OUT, reason: Penjualan).
-  Future<String> createSaleTransaction(List<TransactionItem> items) async {
+  /// Eksekusi transaksi penjualan baru oleh kasir:
+  /// - Jika status == 'LUNAS': Stok langsung dipotong secara atomik & mutasi dicatat.
+  /// - Jika status == 'MENUNGGU_PEMBAYARAN' (Stash): Stok TIDAK dipotong karena belum dibayar.
+  Future<CreateTransactionResult> createSaleTransaction(
+    List<TransactionItem> items, {
+    String customerName = 'Pelanggan (Anonymous)',
+    String orderType = 'DINE_IN',
+    String tableNumber = '',
+    String queueNumber = '',
+    String status = 'LUNAS', // Default alur utama: langsung lunas
+    String? paymentMethod,
+  }) async {
     if (items.isEmpty) {
       throw Exception('Keranjang transaksi tidak boleh kosong!');
     }
 
     final code = '#TRX-${DateTime.now().millisecondsSinceEpoch.toString().substring(6)}';
     final nowTimestamp = FieldValue.serverTimestamp();
+    final isSettled = status == 'LUNAS';
 
     double totalAmount = 0.0;
     double totalCost = 0.0;
@@ -361,6 +471,8 @@ class FirestoreService {
     }
 
     try {
+      final trxDocRef = _db.collection(_collectionTransactions).doc();
+
       await _db.runTransaction((transaction) async {
         // 1. Baca semua dokumen produk untuk validasi stok
         final Map<String, DocumentSnapshot> productSnapshots = {};
@@ -373,7 +485,7 @@ class FirestoreService {
           productSnapshots[it.productId] = snap;
         }
 
-        // 2. Verifikasi stok setiap produk (TIDAK BOLEH NEGATIF)
+        // 2. Verifikasi ketersediaan stok
         for (final it in items) {
           final snap = productSnapshots[it.productId]!;
           final data = snap.data() as Map<String, dynamic>? ?? {};
@@ -386,7 +498,124 @@ class FirestoreService {
           }
         }
 
-        // 3. Kurangi stok produk secara atomik
+        // 3. LOGIKA STOK: HANYA POTONG STOK JIKA TRANSAKSI SUDAH LUNAS (DIBAYAR)
+        // Jika status MENUNGGU_PEMBAYARAN (Stash), STOK TIDAK DIPOTONG!
+        if (isSettled) {
+          for (final it in items) {
+            final docRef = _db.collection(_collectionProducts).doc(it.productId);
+            final snap = productSnapshots[it.productId]!;
+            final data = snap.data() as Map<String, dynamic>? ?? {};
+            final currentStock = (data['stock'] is num) ? (data['stock'] as num).toInt() : 0;
+
+            transaction.update(docRef, {
+              'stock': currentStock - it.quantity,
+              'updated_at': nowTimestamp,
+            });
+          }
+
+          // Catat riwayat mutasi stok keluar (OUT)
+          for (final it in items) {
+            final movDocRef = _db.collection(_collectionMovements).doc();
+            transaction.set(movDocRef, {
+              'product_id': it.productId,
+              'product_name': it.productName,
+              'type': 'OUT',
+              'quantity': it.quantity,
+              'reason': 'Penjualan $code ($orderType)',
+              'created_at': nowTimestamp,
+              'user_id': _currentUserId,
+            });
+          }
+        }
+
+        // 4. Simpan dokumen transaksi penjualan
+        transaction.set(trxDocRef, {
+          'transaction_code': code,
+          'created_at': nowTimestamp,
+          'total_amount': totalAmount,
+          'total_cost': totalCost,
+          'total_items': totalItems,
+          'items': items.map((e) => e.toMap()).toList(),
+          'user_id': _currentUserId,
+          'status': status,
+          'customer_name': customerName,
+          'order_type': orderType,
+          'table_number': tableNumber,
+          'queue_number': queueNumber,
+          'payment_method': paymentMethod,
+          'paid_at': isSettled ? nowTimestamp : null,
+        });
+      });
+
+      return CreateTransactionResult(
+        id: trxDocRef.id,
+        code: code,
+        totalAmount: totalAmount,
+        totalCost: totalCost,
+        totalItems: totalItems,
+      );
+    } catch (e) {
+      throw Exception(e.toString().replaceAll('Exception: ', ''));
+    }
+  }
+
+  /// Pelunasan transaksi kasir yang tertahan (Stash):
+  /// 1. Cek ketersediaan stok produk di database secara atomik.
+  /// 2. POTONG STOK SEKARANG (karena pembayaran baru diterima).
+  /// 3. Catat mutasi stok keluar (type: OUT).
+  /// 4. Update status transaksi menjadi 'LUNAS'.
+  Future<void> settleTransaction({
+    required String transactionId,
+    required String paymentMethod, // 'Tunai' atau 'QRIS'
+  }) async {
+    try {
+      final trxRef = _db.collection(_collectionTransactions).doc(transactionId);
+      final nowTimestamp = FieldValue.serverTimestamp();
+
+      await _db.runTransaction((transaction) async {
+        final trxSnap = await transaction.get(trxRef);
+        if (!trxSnap.exists) {
+          throw Exception('Dokumen transaksi tidak ditemukan!');
+        }
+
+        final trxData = trxSnap.data() ?? {};
+        if (trxData['status'] == 'LUNAS') {
+          // Sudah lunas sebelumnya, tidak perlu potong lagi
+          return;
+        }
+
+        final rawItems = trxData['items'] as List<dynamic>? ?? [];
+        final items = rawItems
+            .map((item) => TransactionItem.fromMap(Map<String, dynamic>.from(item as Map)))
+            .toList();
+        final code = trxData['transaction_code'] ?? '#TRX';
+        final orderType = trxData['order_type'] ?? 'DINE_IN';
+
+        // 1. Baca semua produk untuk cek stok
+        final Map<String, DocumentSnapshot> productSnapshots = {};
+        for (final it in items) {
+          final docRef = _db.collection(_collectionProducts).doc(it.productId);
+          final snap = await transaction.get(docRef);
+          if (!snap.exists) {
+            throw Exception('Produk "${it.productName}" sudah tidak ada di database!');
+          }
+          productSnapshots[it.productId] = snap;
+        }
+
+        // 2. Verifikasi stok mencukupi
+        for (final it in items) {
+          final snap = productSnapshots[it.productId]!;
+          final data = snap.data() as Map<String, dynamic>? ?? {};
+          final currentStock = (data['stock'] is num) ? (data['stock'] as num).toInt() : 0;
+
+          if (currentStock < it.quantity) {
+            throw Exception(
+              'Stok "${it.productName}" tidak mencukupi untuk pelunasan!\n(Sisa stok: $currentStock unit, diminta: ${it.quantity} unit)',
+            );
+          }
+        }
+
+        // 3. POTONG STOK SEKARANG (karena transaksi sudah lunas dibayar)
         for (final it in items) {
           final docRef = _db.collection(_collectionProducts).doc(it.productId);
           final snap = productSnapshots[it.productId]!;
@@ -399,19 +628,7 @@ class FirestoreService {
           });
         }
 
-        // 4. Simpan dokumen transaksi penjualan
-        final trxDocRef = _db.collection(_collectionTransactions).doc();
-        transaction.set(trxDocRef, {
-          'transaction_code': code,
-          'created_at': nowTimestamp,
-          'total_amount': totalAmount,
-          'total_cost': totalCost,
-          'total_items': totalItems,
-          'items': items.map((e) => e.toMap()).toList(),
-          'user_id': _currentUserId,
-        });
-
-        // 5. Catat riwayat mutasi stok untuk setiap produk
+        // 4. Catat mutasi stok keluar (type: OUT)
         for (final it in items) {
           final movDocRef = _db.collection(_collectionMovements).doc();
           transaction.set(movDocRef, {
@@ -419,17 +636,65 @@ class FirestoreService {
             'product_name': it.productName,
             'type': 'OUT',
             'quantity': it.quantity,
-            'reason': 'Penjualan $code',
+            'reason': 'Pelunasan Stash $code ($orderType)',
             'created_at': nowTimestamp,
             'user_id': _currentUserId,
           });
         }
-      });
 
-      return code;
+        // 5. Update status transaksi menjadi LUNAS
+        transaction.update(trxRef, {
+          'status': 'LUNAS',
+          'payment_method': paymentMethod,
+          'paid_at': nowTimestamp,
+        });
+      });
     } catch (e) {
-      throw Exception(e.toString().replaceAll('Exception: ', ''));
+      throw Exception('Gagal melakukan pelunasan transaksi: ${e.toString().replaceAll('Exception: ', '')}');
     }
+  }
+
+  /// Batalkan pesanan tertahan (Stash).
+  /// Karena saat di-stash stok BELUM dipotong, pembatalan pesanan ini
+  /// tidak perlu mengembalikan stok (stok tetap aman).
+  Future<void> cancelStashedTransaction(String transactionId) async {
+    try {
+      await _db.collection(_collectionTransactions).doc(transactionId).delete();
+    } catch (e) {
+      throw Exception('Gagal membatalkan transaksi tertahan: $e');
+    }
+  }
+
+  /// Mendapatkan nomor antrean berikutnya untuk hari ini (format '01', '02', dst.)
+  Future<String> getNextQueueNumber() async {
+    try {
+      final now = DateTime.now();
+      final startOfDay = DateTime(now.year, now.month, now.day);
+      final snap = await _db
+          .collection(_collectionTransactions)
+          .where('user_id', isEqualTo: _currentUserId)
+          .where('created_at', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+          .get();
+
+      final count = snap.docs.length + 1;
+      return count.toString().padLeft(2, '0');
+    } catch (_) {
+      final fallback = (DateTime.now().minute + 1).toString().padLeft(2, '0');
+      return fallback;
+    }
+  }
+
+  /// Stream transaksi khusus yang masih berstatus 'MENUNGGU_PEMBAYARAN' (antrean kasir)
+  Stream<List<TransactionModel>> getPendingTransactionsStream() {
+    return _db
+        .collection(_collectionTransactions)
+        .where('status', isEqualTo: 'MENUNGGU_PEMBAYARAN')
+        .snapshots()
+        .map((snapshot) {
+      final list = snapshot.docs.map((doc) => TransactionModel.fromFirestore(doc)).toList();
+      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return list;
+    });
   }
 
   /// Stream daftar riwayat transaksi penjualan (dengan filter tanggal opsional)

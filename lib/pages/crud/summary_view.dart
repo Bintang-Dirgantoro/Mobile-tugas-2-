@@ -4,7 +4,7 @@ import '../../services/firestore_service.dart';
 import '../../theme/app_colors.dart';
 import 'time_filter_helper.dart';
 
-/// Tampilan Ringkasan Penjualan (Sales Summary berdasarkan Dimensi Waktu)
+/// Tampilan Ringkasan Penjualan (Sales Summary berdasarkan Dimensi Waktu & Status Pelunasan)
 class SummaryView extends StatelessWidget {
   final TimeFilterPeriod selectedPeriod;
   final DateTimeRange? customRange;
@@ -49,18 +49,37 @@ class SummaryView extends StatelessWidget {
 
               final transactions = snapshot.data ?? [];
 
-              double totalRevenue = 0.0;
-              double totalEstimatedProfit = 0.0;
-              int totalSoldItems = 0;
+              double totalPaidRevenue = 0.0;
+              double totalPaidProfit = 0.0;
+              double totalPendingRevenue = 0.0;
+              int totalPaidSoldItems = 0;
+              int paidTrxCount = 0;
+              int pendingTrxCount = 0;
+
+              double qrisRevenue = 0.0;
+              double cashRevenue = 0.0;
+
               final Map<String, int> productSalesCount = {};
 
               for (final t in transactions) {
-                totalRevenue += t.totalAmount;
-                totalEstimatedProfit += t.profit;
-                totalSoldItems += t.totalItems;
+                if (t.isPaid) {
+                  totalPaidRevenue += t.totalAmount;
+                  totalPaidProfit += t.profit;
+                  totalPaidSoldItems += t.totalItems;
+                  paidTrxCount++;
 
-                for (final it in t.items) {
-                  productSalesCount[it.productName] = (productSalesCount[it.productName] ?? 0) + it.quantity;
+                  if (t.paymentMethod == 'QRIS') {
+                    qrisRevenue += t.totalAmount;
+                  } else {
+                    cashRevenue += t.totalAmount;
+                  }
+
+                  for (final it in t.items) {
+                    productSalesCount[it.productName] = (productSalesCount[it.productName] ?? 0) + it.quantity;
+                  }
+                } else {
+                  totalPendingRevenue += t.totalAmount;
+                  pendingTrxCount++;
                 }
               }
 
@@ -86,7 +105,7 @@ class SummaryView extends StatelessWidget {
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
-                              'Laporan Penjualan: ${TimeFilterHelper.getLabel(selectedPeriod, customRange)}',
+                              'Laporan Kasir: ${TimeFilterHelper.getLabel(selectedPeriod, customRange)}',
                               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary),
                             ),
                           ),
@@ -95,13 +114,13 @@ class SummaryView extends StatelessWidget {
                     ),
                     const SizedBox(height: 16),
 
-                    // Grid Metrik Ringkasan
+                    // Grid Metrik Utama: Omzet Lunas & Estimasi Laba
                     Row(
                       children: [
                         Expanded(
                           child: _buildMetricCard(
-                            title: 'Total Penjualan',
-                            value: currency.format(totalRevenue),
+                            title: 'Omzet Bersih (Lunas)',
+                            value: currency.format(totalPaidRevenue),
                             icon: Icons.monetization_on_outlined,
                             color: AppColors.success,
                           ),
@@ -109,8 +128,8 @@ class SummaryView extends StatelessWidget {
                         const SizedBox(width: 12),
                         Expanded(
                           child: _buildMetricCard(
-                            title: 'Estimasi Laba',
-                            value: currency.format(totalEstimatedProfit),
+                            title: 'Estimasi Laba Bersih',
+                            value: currency.format(totalPaidProfit),
                             icon: Icons.trending_up,
                             color: const Color(0xFF38BDF8),
                           ),
@@ -118,36 +137,97 @@ class SummaryView extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 12),
+
+                    // Grid Metrik Kedua: Transaksi Lunas vs Belum Lunas
                     Row(
                       children: [
                         Expanded(
                           child: _buildMetricCard(
-                            title: 'Jumlah Transaksi',
-                            value: '${transactions.length} struk',
-                            icon: Icons.receipt_long,
+                            title: 'Transaksi Selesai',
+                            value: '$paidTrxCount struk lunas',
+                            icon: Icons.check_circle_outline,
                             color: AppColors.accent,
                           ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: _buildMetricCard(
-                            title: 'Produk Terjual',
-                            value: '$totalSoldItems item',
-                            icon: Icons.inventory_2_outlined,
-                            color: AppColors.warning,
+                            title: 'Menunggu Bayar',
+                            value: '$pendingTrxCount pesanan (${currency.format(totalPendingRevenue)})',
+                            icon: Icons.hourglass_top_rounded,
+                            color: pendingTrxCount > 0 ? AppColors.warning : AppColors.textSecondary,
                           ),
                         ),
                       ],
                     ),
 
+                    const SizedBox(height: 20),
+
+                    // Breakdown Metode Pembayaran (QRIS vs Tunai)
+                    const Text(
+                      'Distribusi Metode Pembayaran (Lunas):',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.textPrimary),
+                    ),
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppColors.card,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: Column(
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Row(
+                                children: [
+                                  Icon(Icons.payments_outlined, color: AppColors.accent, size: 20),
+                                  SizedBox(width: 8),
+                                  Text('Tunai (Cash)', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                                ],
+                              ),
+                              Text(currency.format(cashRevenue), style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          const Divider(color: AppColors.border, height: 1),
+                          const SizedBox(height: 12),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Row(
+                                children: [
+                                  Icon(Icons.qr_code_scanner, color: Color(0xFF10B981), size: 20),
+                                  SizedBox(width: 8),
+                                  Text('QRIS', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                                ],
+                              ),
+                              Text(currency.format(qrisRevenue), style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF10B981))),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+
                     const SizedBox(height: 24),
 
                     // Daftar Menu Paling Laris
-                    const Text(
-                      'Peringkat Menu Paling Laku:',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.textPrimary),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Peringkat Menu Paling Laku:',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.textPrimary),
+                        ),
+                        Text(
+                          'Total $totalPaidSoldItems item terjual',
+                          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 10),
 
                     if (sortedProducts.isEmpty)
                       Container(
@@ -160,7 +240,7 @@ class SummaryView extends StatelessWidget {
                         ),
                         child: const Center(
                           child: Text(
-                            'Belum ada transaksi pada periode ini',
+                            'Belum ada transaksi lunas pada periode ini',
                             style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
                           ),
                         ),
@@ -222,7 +302,7 @@ class SummaryView extends StatelessWidget {
     required Color color,
   }) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.card,
         borderRadius: BorderRadius.circular(16),
@@ -234,15 +314,21 @@ class SummaryView extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(title, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-              Icon(icon, color: color, size: 20),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Icon(icon, color: color, size: 18),
             ],
           ),
           const SizedBox(height: 8),
           Text(
             value,
             style: TextStyle(
-              fontSize: 17,
+              fontSize: 15,
               fontWeight: FontWeight.bold,
               color: color,
             ),

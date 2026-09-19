@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../../data/menu_presets.dart';
 import '../../services/firestore_service.dart';
 import '../../theme/app_colors.dart';
 import 'crud_form_page.dart';
@@ -57,6 +58,66 @@ class _CrudPageState extends State<CrudPage> {
       _sharedPeriod = period;
       _sharedCustomRange = custom;
     });
+  }
+
+  bool _isLoadingPreset = false;
+
+  // Memuat Template Menu Starter Warmindo secara instan ke Firestore
+  Future<void> _loadPresetMenu() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.card,
+        title: const Row(
+          children: [
+            Icon(Icons.download_rounded, color: AppColors.accent),
+            SizedBox(width: 8),
+            Text('Muat Template Menu?', style: TextStyle(color: AppColors.textPrimary, fontSize: 18)),
+          ],
+        ),
+        content: Text(
+          'Sistem akan menambahkan ${MenuPresets.items.length} item dari "${MenuPresets.templateName}" ke dalam katalog Firestore beserta log mutasi stok awalnya.\n\nLanjutkan?',
+          style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal', style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.accent),
+            child: const Text('Ya, Muat Menu', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() => _isLoadingPreset = true);
+    try {
+      await _firestoreService.importPresetMenu(MenuPresets.items);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${MenuPresets.items.length} menu dari "${MenuPresets.templateName}" berhasil dimuat!'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal memuat template: $e'),
+          backgroundColor: AppColors.danger,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingPreset = false);
+      }
+    }
   }
 
   // Dialog Konfirmasi Hapus Produk Master
@@ -243,23 +304,48 @@ class _CrudPageState extends State<CrudPage> {
             color: AppColors.card,
             child: Column(
               children: [
-                TextField(
-                  style: const TextStyle(color: AppColors.textPrimary),
-                  decoration: InputDecoration(
-                    hintText: 'Cari master menu...',
-                    hintStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
-                    prefixIcon: const Icon(Icons.search, color: AppColors.accent),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(color: AppColors.border),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        style: const TextStyle(color: AppColors.textPrimary),
+                        decoration: InputDecoration(
+                          hintText: 'Cari master menu...',
+                          hintStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                          prefixIcon: const Icon(Icons.search, color: AppColors.accent),
+                          contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: const BorderSide(color: AppColors.border),
+                          ),
+                          filled: true,
+                          fillColor: AppColors.background,
+                        ),
+                        onChanged: (val) {
+                          setState(() => _catalogSearchQuery = val.toLowerCase().trim());
+                        },
+                      ),
                     ),
-                    filled: true,
-                    fillColor: AppColors.background,
-                  ),
-                  onChanged: (val) {
-                    setState(() => _catalogSearchQuery = val.toLowerCase().trim());
-                  },
+                    const SizedBox(width: 8),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: AppColors.background,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: IconButton(
+                        tooltip: 'Muat Template ${MenuPresets.templateName}',
+                        icon: _isLoadingPreset
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.accent),
+                              )
+                            : const Icon(Icons.playlist_add, color: AppColors.accent),
+                        onPressed: _isLoadingPreset ? null : _loadPresetMenu,
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 8),
                 SingleChildScrollView(
@@ -299,11 +385,95 @@ class _CrudPageState extends State<CrudPage> {
 
           // Daftar Master Menu
           Expanded(
-            child: items.isEmpty
-                ? const Center(
-                    child: Text('Belum ada menu di katalog', style: TextStyle(color: AppColors.textSecondary)),
+            child: allProducts.isEmpty
+                ? Center(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: AppColors.accent.withValues(alpha: 0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.restaurant_menu,
+                              size: 48,
+                              color: AppColors.accent,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Katalog Menu Masih Kosong',
+                            style: TextStyle(
+                              color: AppColors.textPrimary,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Database baru saja dikosongkan. Mulai cepat dengan memuat paket menu starter Warmindo atau tambah manual satu per satu.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 13,
+                              height: 1.4,
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          _isLoadingPreset
+                              ? const CircularProgressIndicator(color: AppColors.accent)
+                              : ElevatedButton.icon(
+                                  onPressed: _loadPresetMenu,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.accent,
+                                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                  icon: const Icon(Icons.download_rounded, color: Colors.white),
+                                  label: Text(
+                                    'Muat ${MenuPresets.templateName} (${MenuPresets.items.length} Menu)',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ),
+                          const SizedBox(height: 14),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: AppColors.card,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: AppColors.border),
+                            ),
+                            child: const Text(
+                              '💡 File template dapat Anda edit langsung di:\nlib/data/menu_presets.dart',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   )
-                : ListView.builder(
+                : items.isEmpty
+                    ? const Center(
+                        child: Text(
+                          'Tidak ada menu yang sesuai dengan pencarian/filter',
+                          style: TextStyle(color: AppColors.textSecondary),
+                        ),
+                      )
+                    : ListView.builder(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
                     itemCount: items.length,
                     itemBuilder: (context, index) {
