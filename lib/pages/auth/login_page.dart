@@ -25,7 +25,6 @@ class _LoginPageState extends State<LoginPage> {
 
   bool _obscurePassword = true;
   bool _isLoading = false;
-  bool _isRegisterMode = false;
 
   @override
   void dispose() {
@@ -48,24 +47,10 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
-    if (_isRegisterMode && password.length < 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Kata sandi pendaftaran minimal 6 karakter!'),
-          backgroundColor: AppColors.warning,
-        ),
-      );
-      return;
-    }
-
     setState(() => _isLoading = true);
 
     try {
-      if (_isRegisterMode) {
-        await _authService.register(email, password);
-      } else {
-        await _authService.login(email, password);
-      }
+      await _authService.login(email, password);
 
       if (!mounted) return;
       Navigator.pushReplacement(
@@ -73,18 +58,14 @@ class _LoginPageState extends State<LoginPage> {
         MaterialPageRoute(builder: (context) => const HomePage()),
       );
     } on FirebaseAuthException catch (e) {
-      String message = _isRegisterMode ? 'Pendaftaran gagal.' : 'Login gagal, periksa koneksi Anda.';
+      String message = 'Login gagal, periksa koneksi Anda.';
 
       if (e.code == 'invalid-credential' || e.code == 'wrong-password' || e.code == 'user-not-found') {
-        message = 'Email atau password yang Anda masukkan salah.';
-      } else if (e.code == 'email-already-in-use') {
-        message = 'Email ini sudah terdaftar. Silakan langsung login.';
-      } else if (e.code == 'weak-password') {
-        message = 'Kata sandi terlalu lemah (minimal 6 karakter).';
+        message = 'Email atau kata sandi yang Anda masukkan salah.';
       } else if (e.code == 'invalid-email') {
         message = 'Format alamat email tidak valid.';
       } else if (e.code == 'user-disabled') {
-        message = 'Akun pengguna ini telah dinonaktifkan.';
+        message = 'Akun kasir ini telah dinonaktifkan oleh administrator.';
       } else if (e.code == 'too-many-requests') {
         message = 'Terlalu banyak percobaan gagal. Silakan coba beberapa saat lagi.';
       } else if (e.code == 'network-request-failed') {
@@ -143,7 +124,7 @@ class _LoginPageState extends State<LoginPage> {
                 const SizedBox(height: 24),
 
                 Text(
-                  _isRegisterMode ? 'Daftar Akun Baru' : 'Smart UMKM & Utilitas',
+                  'Smart UMKM & Utilitas',
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     fontSize: 24,
@@ -152,12 +133,10 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                 ),
                 const SizedBox(height: 6),
-                Text(
-                  _isRegisterMode
-                      ? 'Buat akun baru untuk mulai mengelola bisnis & utilitas Anda'
-                      : 'Silakan login untuk mengakses seluruh fitur aplikasi',
+                const Text(
+                  'Portal Kasir & Operasional Bisnis Internal',
                   textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                  style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
                 ),
                 const SizedBox(height: 32),
 
@@ -167,8 +146,8 @@ class _LoginPageState extends State<LoginPage> {
                   keyboardType: TextInputType.emailAddress,
                   style: const TextStyle(color: AppColors.textPrimary),
                   decoration: InputDecoration(
-                    labelText: 'Alamat Email',
-                    hintText: 'nama@email.com',
+                    labelText: 'Alamat Email Kasir',
+                    hintText: 'kasir@bisnis.com',
                     hintStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
                     prefixIcon: const Icon(Icons.email_outlined, color: AppColors.accent, size: 20),
                     filled: true,
@@ -184,7 +163,7 @@ class _LoginPageState extends State<LoginPage> {
                   obscureText: _obscurePassword,
                   style: const TextStyle(color: AppColors.textPrimary),
                   decoration: InputDecoration(
-                    labelText: _isRegisterMode ? 'Kata Sandi Baru (Min. 6 Karakter)' : 'Kata Sandi',
+                    labelText: 'Kata Sandi',
                     hintText: '••••••••',
                     hintStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
                     prefixIcon: const Icon(Icons.key_outlined, color: AppColors.accent, size: 20),
@@ -205,7 +184,7 @@ class _LoginPageState extends State<LoginPage> {
                 ),
                 const SizedBox(height: 24),
 
-                // Tombol Login / Daftar
+                // Tombol Login
                 ElevatedButton(
                   onPressed: _isLoading ? null : _handleAuth,
                   style: ElevatedButton.styleFrom(
@@ -220,34 +199,35 @@ class _LoginPageState extends State<LoginPage> {
                           width: 20,
                           child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                         )
-                      : Text(
-                          _isRegisterMode ? 'Daftar Akun Baru' : 'Masuk ke Aplikasi',
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                      : const Text(
+                          'Masuk ke Aplikasi',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                         ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 16),
 
-                // Tombol Beralih antara Login & Daftar
-                TextButton(
-                  onPressed: _isLoading
-                      ? null
-                      : () {
-                          setState(() {
-                            _isRegisterMode = !_isRegisterMode;
-                          });
-                        },
-                  child: Text(
-                    _isRegisterMode
-                        ? 'Sudah punya akun? Masuk di sini'
-                        : 'Belum punya akun? Daftar di sini',
-                    style: const TextStyle(
-                      color: AppColors.accent,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
+                // Keterangan Akun Internal
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: AppColors.card,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.shield_outlined, color: AppColors.textSecondary, size: 18),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Akses internal: Akun kasir dan staf disediakan oleh Administrator.',
+                          style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
 
                 const Text(
                   'Catatan: Sesi login akan tetap tersimpan di perangkat ini hingga Anda menekan tombol Logout.',
