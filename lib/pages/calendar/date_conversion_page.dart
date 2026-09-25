@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:hijri/hijri_calendar.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_text_styles.dart';
 
 /// Halaman Konversi Tanggal Hijriah & Kalkulator Umur Presisi
 /// 
@@ -199,7 +200,16 @@ class _DateConversionPageState extends State<DateConversionPage>
       lastDate: DateTime(2100),
       builder: (context, child) => Theme(
         data: ThemeData.dark().copyWith(
-          colorScheme: const ColorScheme.dark(primary: AppColors.accent, surface: AppColors.card),
+          colorScheme: const ColorScheme.dark(
+            primary: AppColors.accent,
+            surface: AppColors.card,
+            onPrimary: AppColors.textPrimary,
+            onSurface: AppColors.textPrimary,
+          ),
+          textTheme: ThemeData.dark().textTheme.apply(
+            bodyColor: AppColors.textPrimary,
+            displayColor: AppColors.textPrimary,
+          ),
         ),
         child: child!,
       ),
@@ -219,7 +229,16 @@ class _DateConversionPageState extends State<DateConversionPage>
       lastDate: now, // Proteksi tidak bisa memilih masa depan
       builder: (context, child) => Theme(
         data: ThemeData.dark().copyWith(
-          colorScheme: const ColorScheme.dark(primary: AppColors.accent, surface: AppColors.card),
+          colorScheme: const ColorScheme.dark(
+            primary: AppColors.accent,
+            surface: AppColors.card,
+            onPrimary: AppColors.textPrimary,
+            onSurface: AppColors.textPrimary,
+          ),
+          textTheme: ThemeData.dark().textTheme.apply(
+            bodyColor: AppColors.textPrimary,
+            displayColor: AppColors.textPrimary,
+          ),
         ),
         child: child!,
       ),
@@ -236,7 +255,16 @@ class _DateConversionPageState extends State<DateConversionPage>
       initialTime: _birthTime,
       builder: (context, child) => Theme(
         data: ThemeData.dark().copyWith(
-          colorScheme: const ColorScheme.dark(primary: AppColors.accent, surface: AppColors.card),
+          colorScheme: const ColorScheme.dark(
+            primary: AppColors.accent,
+            surface: AppColors.card,
+            onPrimary: AppColors.textPrimary,
+            onSurface: AppColors.textPrimary,
+          ),
+          textTheme: ThemeData.dark().textTheme.apply(
+            bodyColor: AppColors.textPrimary,
+            displayColor: AppColors.textPrimary,
+          ),
         ),
         child: child!,
       ),
@@ -436,7 +464,7 @@ class _DateConversionPageState extends State<DateConversionPage>
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: AppColors.danger),
               ),
-              child: Text(_ageError!, style: const TextStyle(color: Colors.white, fontSize: 13)),
+              child: Text(_ageError!, style: const TextStyle(color: AppColors.textPrimary, fontSize: 13)),
             ),
 
           if (_ageResult != null) ...[
